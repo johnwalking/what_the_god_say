@@ -63,7 +63,7 @@ bible-oracle/
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test"
   }
 }
 ```
@@ -429,7 +429,7 @@ test('空字串走兜底且不拋錯', () => {
 - [ ] **Step 2: 執行測試，確認失敗**
 
 ```bash
-cd bible-oracle && node --test tests/
+cd bible-oracle && node --test
 ```
 
 Expected: FAIL — `Cannot find module .../assets/match.js`
@@ -527,7 +527,7 @@ export function answer(question, data, n = 0) {
 - [ ] **Step 4: 執行測試，確認通過**
 
 ```bash
-cd bible-oracle && node --test tests/
+cd bible-oracle && node --test
 ```
 
 Expected: PASS，18 個測試全綠
@@ -1693,7 +1693,7 @@ test('冷門問題走兜底', () => {
 ```
 
 ```bash
-cd bible-oracle && node --test tests/
+cd bible-oracle && node --test
 ```
 
 Expected: PASS，20 個測試全綠
