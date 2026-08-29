@@ -53,10 +53,12 @@ export function pickTopic(normalized, topics) {
 export function answer(question, data, n = 0) {
   const normalized = normalize(question);
   const seed = hashFNV1a(normalized);
+  // n 來自網址參數，使用者可竄改；非負整數以外一律當作 0
+  const 位移 = Number.isInteger(n) && n >= 0 ? n : 0;
   const topic = pickTopic(normalized, data.topics);
 
   if (topic) {
-    const verse = topic.verses[(seed + n) % topic.verses.length];
+    const verse = topic.verses[(seed + 位移) % topic.verses.length];
     return {
       kind: 'topic',
       topicId: topic.id,
@@ -64,20 +66,20 @@ export function answer(question, data, n = 0) {
       verseId: verse.id,
       text: verse.text,
       quip: verse.quip,
-      index: n,
+      index: 位移,
       poolSize: topic.verses.length,
     };
   }
 
-  const verse = data.fallback[(seed + n) % data.fallback.length];
+  const verse = data.fallback[(seed + 位移) % data.fallback.length];
   return {
     kind: 'fallback',
     topicId: null,
     ref: verse.ref,
     verseId: verse.id,
     text: verse.text,
-    quip: data.wrappers[(seed + n) % data.wrappers.length],
-    index: n,
+    quip: data.wrappers[(seed + 位移) % data.wrappers.length],
+    index: 位移,
     poolSize: data.fallback.length,
   };
 }

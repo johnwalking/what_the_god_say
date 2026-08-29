@@ -118,3 +118,11 @@ test('空字串走兜底且不拋錯', () => {
   assert.equal(a.kind, 'fallback');
   assert.ok(a.text);
 });
+
+test('負數的 n 被當作 0，不拋錯', () => {
+  assert.equal(answer('我老婆不好', data, -5).ref, answer('我老婆不好', data, 0).ref);
+});
+
+test('非數字的 n 被當作 0，不拋錯', () => {
+  assert.equal(answer('我老婆不好', data, NaN).ref, answer('我老婆不好', data, 0).ref);
+});
