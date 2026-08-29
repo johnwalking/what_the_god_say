@@ -1,0 +1,135 @@
+:root {
+--popup_bgColor: #fffdf5;	/* off-white */
+}
+
+h1 { font-weight: normal; }
+.main	{padding:0.5em}
+.main:after	{content:"";display:block}
+li	{list-style:disc inside}
+a.xx	{background-color:#333333 !important}
+a.nn	{background-color:#202050 !important}
+a.oo	{background-color:#205030 !important}
+a.aa	{background-color:#333300 !important}
+html[dir=rtl] body	{text-align:right;direction:rtl}
+span.add	{font-style:italic}
+.notemark:hover .popup	{display:inline; line-height:1.6;}
+.notemark:hover .crpopup	{display:inline; line-height:1.6;}
+.b	{display:block;margin-left:12em;text-indent:-2em}
+.bdit,.bk	{font-weight:bold;font-style:italic}
+.ebm,.ebp,.ebq1,.ebq2,.ebq3,.cov,.cd,.conc,.cls	{display:block;margin:.85em 0 .5em 0}	/* margin-top was .5em */
+.cd,.conc,.cls	{text-align:justify}
+.cd,.conc	{color:rgb(0,0,128)}
+.cov	{text-align:center}
+.ebp	{text-indent:2em}
+.ebq1	{margin-left:12em;text-indent:-4em}
+.ebq2	{margin-left:8em;text-indent:-4em}
+.ebq3	{margin-left:6em;text-indent:-4em}
+.ebs,.ebs1,.ebs2,.ebs3	{font-weight:bold;display:block;margin:.85em 0 .5em 0;text-indent:2em;color:rgb(0,0,128)}	/* margin-top was .5em */
+.ebs1	{font-size:1.2em}
+.ebs3	{font-size:0.9em}
+.fm,.notemark	{vertical-align:super;margin-left:.16em;line-height:0;position: relative;text-decoration:none;color:rgb(0,0,128)}
+.fp	{display:block;margin:.85em 0 .5em 12em}	/* margin-top was .5em */
+.f,.glo	{display:block;margin:.85em 0 .5em 0;color:rgb(0,0,128)}	/* margin-top was .5em */
+.f,.x	{margin:2em;font-size:0.7em;color:rgb(0,0,128)}
+.fv	{color:maroon}
+.glo	{font-weight:bold;text-indent:2em}
+.ib,.idx,.ie,.iex,.intro,.ip,.ili,.ili1,.io,.io1,.io2,.io3,.io4,.io,.io1,.io2,.io3,.io4,.im,.imi,.imq,.imt,.imt1,.imt2,.imt3,.imte,.iot,.ipr,.iq,.iq1,.iq2,.iq3,
+.is,.is1,.is2,.is3,.notebackref,.f,.x,.notemark	{color:blue;font-size:14pt}
+.ib,.idx,.ie,.iex,.intro,.ip,.zp	{margin:.85em 0 .5em 0;text-indent:2em;display:block}	/* margin-top was .5em */
+.ili,.ili1,.io,.io1,.io2,.io3,.io4	{margin:.85em 0 .5em 2em;list-style-type:square;display:list-item}	/* margin-top was .5em */
+.io,.io1,.io2,.io3,.io4	{list-style-type:none}
+.io2	{margin-left:4em}
+.io3	{margin-left:6em}
+.io4	{margin-left:8em}
+.im,.imi,.imq	{display:block;margin-bottom:.5em}
+.imi	{text-indent:2em;margin:.85em 12em 0 12em}	/* margin-top was .5em */
+.imq	{text-indent:2em;margin:.85em 0 0 12em}	/* margin-top was .5em */
+.imt,.imt1,.imt2,.imt3,.imte,.iot	{font-weight:bold;display:block;margin:.85em 0 .5em 0;text-indent:2em}	/* margin-top was .5em */
+.imt2,.iot	{text-indent:2em}
+.ipi,.ipq,.pref,.pub,.pubinfo,.spine,
+.ipr,.iq,.iq1,.iq2,.iq3	{display:block;margin:.85em 0 .5em 2em;text-indent:2em}	/* margin-top was .5em */
+.iq,.iq1,.iq2,.iq3	{text-indent:-8em;margin-left:12em}
+.iq2	{text-indent:-4em}
+.iq3	{text-indent:-2em}
+.is,.is1,.is2,.is3	{font-weight:bold;display:block;margin:.85em 0 .5em 0;color:rgb(0,0,128)}	/* margin-top was .5em */
+.is,.is1	{font-size:1.2em}
+.is3	{font-size:0.9em}
+.keyword,.keyword1,.keyword2,.keyword3	{font-weight:bold;display:block;margin:.85em 12em .5em 0;text-indent:-12em}	/* margin-top was .5em */
+.keyword2	{text-indent:-4em}
+.keyword3	{text-indent:-2em}
+.li,.li1,.ph,.ph1	{display:list-item;list-style-type:none;text-indent:2em}
+.li2,.ph2,.phi,.li3,.ph3	{display:list-item;list-style-type:none;text-indent:4em}
+.li3,.ph3	{text-indent:12em}
+.m	{margin-top:0}
+.mainindex	{background:rgb(240,255,244);max-width:40em}
+.mi	{text-indent:2em;margin-top:0}
+.mr	{display:block;margin:.85em 0 .5em 0;text-align:center;text-indent:2em}	/* margin-top was .5em */
+.ms2,.ms3	{font-weight:bold;display:block;margin:.85em 0 .5em 0;text-align:center;text-indent:2em}	/* margin-top was .5em */
+h1,h2,h3,.mt,.mt1,.mte,
+.mte1,.mt2,.mte2,.mt3,.mte3	{font-weight:bold;font-size:1.2em;text-align:center}
+.mt,.mt1,.mte,.mte1	{font-size:1.4em}
+.mt2,mte2	{font-size:1.2em}
+.qac,.k1,.nd,.sc,.xk,.k,.ior,.bd,.em	{font-weight:bold}
+.qs	{text-align:right}
+.ndx,.no,.ft	{font-weight:normal}
+.rr,.rq,.rq,.fq,.fqa,.it,.sls,.sp	{font-style:italic}
+.w,.wg,.wh,.wr,.zc	{font-style:normal}
+.qt	{font-style:oblique}
+.ord	{vertical-align:super;text-decoration:underline}
+.nb, .ps { text-indent: 0em; margin-top: 0em }
+.p,.p1,.pb,.pde,.pdi	{text-indent:2em;margin-top:.85em}	/* margin-top was .5em */
+.p,.nb	{display:block;font-size:1em}
+.pc	{margin-top:.85em;text-align:center}	/* margin-top was .5em */
+.pm,.pmo,.pmc,.psi,.pi,.pi1,.pi2,.pi3,
+.pmr,.pr	{text-indent:2em}
+.pi,.pi1	{margin:.85em 0 0 2em}	/* margin-top was .5em */
+.pi2	{margin:.85em 0 0 4em}	/* margin-top was .5em */
+.pi3	{margin:.85em 0 0 12em}	/* margin-top was .5em */
+.pm,.pmo,.pmc,.psi,.pmr,.pr	{margin:.85em 2em 0 2em}	/* margin-top was .5em */
+.q,.q1,.q2,.q3	{margin-top:0pt}
+.q,.q1,.q2,.q3	{margin-top:0pt}
+html[dir=ltr] .q,.q1	{text-indent:-2em;margin-left:2em}
+html[dir=ltr] .q2	{text-indent:-1em; margin-left:2em}
+html[dir=ltr] .q3	{text-indent:-1em; margin-left:3em}
+html[dir=rtl] .q,.q1	{text-indent:-2em;margin-right:2em}
+html[dir=rtl] .q2	{text-indent:-1em; margin-right:2em}
+html[dir=rtl] .q3	{text-indent:-1em; margin-right:3em}
+.qa	{margin:.85em 0 .5em 0;font-weight:bold;display:block;text-align:center}	/* margin-top was .5em */
+.qc	{text-align:center}
+.qm,.qm1,.qm2,.qm3	{margin-top:0;text-indent:-8em;margin-left:6em;margin-right:6em}
+.qm2	{text-indent:-6em}
+.qm3	{text-indent:-2em}
+.r,.sr	{font-style:italic;text-align:center;margin-bottom:.5em}
+.s2,.s3	{font-weight:bold;text-align:center}
+.s,.s1	{font-weight:bold;text-align:center;margin-top:.6em}
+.chapter	{font-size:1.5em;font-weight:bold;float:left;margin-right:.3em;vertical-align:top}
+.p .chapter, .q .chapter,
+.q1 .chapter .q2 .chapter,
+.q3 .chapter, .poetry .chapter	{margin-right:1em}
+.footnote,
+.crossRefNote	{display: block; margin-top:.85em;margin-left:0em}	/* margin-top was .5em */
+.notebackref	{margin: 1em}
+.fine	{font-size:10pt;color:#333333}
+
+/* overrides */
+.popup {display:none; font-size:1.15rem; text-indent:.2em; padding:.685em; -webkit-animation: slide-down .6s ease-out; -moz-animation: slide-down .6s ease-out; background-image:linear-gradient(to bottom, rgba(0,0,0,0), var(--popup_bgColor), var(--popup_bgColor), var(--popup_bgColor),var(--popup_bgColor))}
+.popup:before {content:' '; display:block}
+@-webkit-keyframes slide-down {
+	0% {opacity:0}
+	100% {opacity: 1}
+}
+@-moz-keyframes slide-down {
+	0% {opacity:0}
+	100% {opacity:1}
+}
+.d	{display:block;margin-top:1.4em;margin-bottom:1em; font-style:italic; font-weight:500}
+.s1	{font-weight:600;text-align:center;margin-top:.6em}
+.s {font-weight:600;text-align:center;margin: 1.5em 0 0}
+.s:before {content:'\2014 '}
+.s:after {content:' \2014'}
+.main .r {font-style:italic;text-align:center;margin-bottom:.5em}
+.chinPage .notemark {font-size:1em}
+.notemark, .notebackref {letter-spacing:0}
+
+/* for testing */
+

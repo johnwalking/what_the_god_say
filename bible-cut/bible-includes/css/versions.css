@@ -1,0 +1,41 @@
+/*****************
+NOTE:
+
+To activate a setting, copy it to go AFTER that section's asterisk-asterisk-slash line.
+
+*****************/
+ 
+/** Section 1a: Bible versions (KJV, WEB, LXX, CUT （和合本 - 繁）, CUS （和合本 - 简）
+
+.bVer_KJV, .topBackLinks span.bVer_KJV {display:inline} .tr_KJV {display:table-row}
+.bVer_WEB, .topBackLinks span.bVer_WEB {display:inline} .tr_WEB {display:table-row}
+.bVer_LXX, .topBackLinks span.bVer_LXX {display:inline} .tr_LXX {display:table-row}
+.bVer_CUT, .topBackLinks span.bVer_CUT {display:inline} .tr_CUT {display:table-row}
+.bVer_CUS, .topBackLinks span.bVer_CUS {display:inline} .tr_CUS {display:table-row}
+**/
+.bVer_CUT, .topBackLinks span.bVer_CUT {display:inline} .tr_CUT {display:table-row}
+
+/** Section 1b: don't show links to other versions
+(there is only one Bible version)
+
+.versionLinks	{display:none}
+
+**/
+.versionLinks	{display:none}
+
+/** Section 2a: show Apocrypha?
+
+Note:
+	don't show Apocrypha	- activate .ap_link line
+
+.ap_link, tr.ap_link	{display:none}
+
+**/
+.ap_link, tr.ap_link	{display:none}
+
+/** Section 2b: don't show "All Apocrypha" link
+(only one version has AP)
+
+.allApLink	{display:none}
+
+**/

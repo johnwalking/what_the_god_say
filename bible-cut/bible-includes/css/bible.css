@@ -1,0 +1,709 @@
+:root {
+--body-bgColor: rgba(223,207,197,.15);	/* #DFCFC5 */
+--text_color: black;
+--text_color_screen_light: #333;
+--text_color_screen_medium: #222;
+--text_color_screen_dark: #000;
+--a_visited_color: #9a5816;	/* brown */
+--a_color: #1f21d9;		/* blue */
+--red_color: #ff2500;	/* red * */
+--red2_color: #bc3606;	/* dark red * */
+--red3_color: #ac3206;	/* darker red * */
+--note_color: green;
+--inline_note_color: #777;
+--collapsible_label_text_color: #1f21d9;
+--collapsible_hoverColor: #9a5816;	/* brown */
+--collapsible_borderColor: rgba(204,204,204, 1);	/* #ccc */
+--content_inner_bgColor: rgba(207,173,149,0.15);
+--button_borderColor: rgba(204,204,204, 1);	/* #ccc */
+--bibleQuote_borderColor: rgba(204,204,204, 1);	/* #ccc */
+--hr_regular_color: #999;	/* light grey */
+--table_border_color: #999;	/* light grey */
+--quick_note_color: green;	/* quick note inside Scriptures */
+--list_red_bullet_color: #ff2500;	/* darker red */
+--chapHdr_text_color:   #111;
+--chapNum_text_color:	#111;
+--chapNum_bgColor:		#f9f6f5;
+--version_CUS-bgColor:#F5EDEA;
+--version_CUT-bgColor:#F5EDEA;
+--version_KJV_bgColor:#F5EDEA;
+--version_WEB_bgColor:#F5EDEA;
+--version-LXX-bgColor:#f3eaea;
+--CUT_chapHdr_bgColor:#edded9;
+--CUS_chapHdr_bgColor:#edded9;
+--KJV_chapHdr_bgColor:#edded9;
+--LXX_chapHdr_bgColor:#edded9;
+--WEB_chapHdr_bgColor:#edded9;
+--goto_top_color1:rgba(31, 33, 217, 0.8);	/* transparent link color */
+--goto_top_color2:rgba(31, 33, 217, 1);	/* transparent link color */
+--goto_verse_color:rgba(31, 33, 217, 0.6);	/* transparent link color */
+--hover_hilite_bgColor:#faf0e6;		/* linen */
+--wj_text_color1:		rgb(180,0,0);			/* dark red */
+--wj_text_color2:		rgb(160,0,0);			/* darker red */
+--grid_bgColor:#faf0e6;		/* linen */
+--darker_bgColor1:	rgba(0,0,0,.08);	/* transparent black */
+--ten-bgColor:	rgba(218, 220, 220,.5);
+--currVer-bgColor: #e5e6e6;	/* light gray */
+--currVer-color: #a85151;	/* brown */
+--currVer-hoverColor: #fbf4b5;	/* pale yellow */
+}
+
+/* Fonts */
+/* thin */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Thin-webfont.woff') format('woff'); font-weight:300; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-ThinItalic-webfont.woff') format('woff'); font-weight:300; font-style:italic}
+
+/* light */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Light-webfont.woff') format('woff'); font-weight:400; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-LightItalic-webfont.woff') format('woff'); font-weight:400; font-style:italic}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-Light-webfont.woff') format('woff'); font-weight:400; font-style:normal; font-stretch:condensed}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-LightItalic-webfont.woff') format('woff'); font-weight:400; font-style:italic; font-stretch:condensed}
+
+/* regular */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Regular-webfont.woff') format('woff'); font-weight:500; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Italic-webfont.woff') format('woff'); font-weight:500; font-style:italic}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-Regular-webfont.woff') format('woff'); font-weight:500; font-style:normal; font-stretch:condensed}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-Italic-webfont.woff') format('woff'); font-weight:500; font-style:italic; font-stretch:condensed}
+
+/* medium */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Medium-webfont.woff') format('woff'); font-weight:600; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-MediumItalic-webfont.woff') format('woff'); font-weight:600; font-style:italic}
+
+/* bold */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Bold-webfont.woff') format('woff'); font-weight:700; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-BoldItalic-webfont.woff') format('woff'); font-weight:700; font-style:italic}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-Bold-webfont.woff') format('woff'); font-weight:700; font-style:normal; font-stretch:condensed}
+@font-face {font-family:'Roboto'; src:url('roboto/RobotoCondensed-BoldItalic-webfont.woff') format('woff'); font-weight:700; font-style:italic; font-stretch:condensed}
+
+/* black */
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-Black-webfont.woff') format('woff'); font-weight:800; font-style:normal}
+@font-face {font-family:'Roboto'; src:url('roboto/Roboto-BlackItalic-webfont.woff') format('woff'); font-weight:800; font-style:italic}
+/* End of Fonts */
+
+/* 1 rem = 16px */
+html {font-size: 16px}
+
+body {font-family: 'Roboto', Arial, sans-serif; line-height: 1.85; padding:2rem 32px 0 1rem}
+body.noTopOptions {padding-top:0}
+
+@media screen and (max-width: 660px) {
+	body, li {font-size:1.08rem}
+	.chinPage, .chin, .chinVerse, .version-CUT, .version-CUS, .bVer_CUT, .bVer_CUS, .topBackLinks span.bVer_CUT, .topBackLinks span.bVer_CUS, .topBackLinks span.allVer_link {letter-spacing:0.12em;}
+	.chapHdr {font-size:1.2rem; line-height:2}
+
+	/* indent*/
+	.indent {margin-left:60px}
+	/* indents for Bible */
+	.p-indent {text-indent:2rem}
+	.indent1a, .q {margin-left:40px; margin-right:20px; margin-bottom:0}	/* .q in WEB Bible */
+	.indent1 {margin: 0 20px 0 40px}
+	.indent2, .q2 {margin:0 20px 0 65px}	/* .q2 in WEB Bible */
+	.indent3 {margin:0 20px 0 110px}
+
+	.indent1a sup, .indent1 sup, .q .verse, .q2 .verse .q2 {position:relative; left:-40px}
+	.indent2 sup {position:absolute; left:-65px}
+	.indent3 sup {position:absolute; left:-90px}
+}
+
+@media screen and (min-width: 661px) and (max-width:800px) {
+	body {font-size:1.2rem}
+	.chinPage, .chin, .chinVerse, .version-CUT, .version-CUS, .bVer_CUT, .bVer_CUS, .topBackLinks span.bVer_CUT, .topBackLinks span.bVer_CUS, .topBackLinks span.allVer_link {letter-spacing:0.12em;}
+	.chapHdr {font-size:1.225rem; line-height:2}
+
+	/* indent*/
+	.indent {margin-left:50px}
+	/* indents for Bible */
+	.p-indent {text-indent:2rem}
+	.indent1a, .q {margin-left:50px; margin-right:30px; margin-bottom:0}	/* .q in WEB Bible */
+	.indent1 {margin: 0 30px 0 50px}
+	.indent2, .q2 {margin:0 30px 0 75px}	/* .q2 in WEB Bible */
+	.indent3 {margin:0 30px 0 100px}
+
+	.indent1a sup, .indent1 sup, .q .verse, .q2 .verse .q2 {position:relative; left:-50px}
+	.indent2 sup {position:absolute; left:-75px}
+	.indent3 sup {position:absolute; left:-100px}
+}
+
+@media screen and (min-width: 801px) {
+	body {font-size:1.225rem}
+	.chinPage, .chin, .chinVerse, .version-CUT, .version-CUS, .bVer_CUT, .bVer_CUS, .topBackLinks span.bVer_CUT, .topBackLinks span.bVer_CUS, .topBackLinks span.allVer_link {letter-spacing:0.1em;}
+	.chapHdr {font-size:1.25rem; line-height:2}
+
+	/* indent*/
+	.indent {margin-left:60px}
+	/* indents for Bible */
+	.p-indent {text-indent:2rem}
+	.indent1a, .q {margin-left:60px; margin-right:40px; margin-bottom:0}	/* .q in WEB Bible */
+	.indent1 {margin: 0 40px 0 60px}
+	.indent2, .q2 {margin:0 40px 0 85px}	/* .q2 in WEB Bible */
+	.indent3 {margin:0 40px 0 110px}
+
+	.indent1a sup, .indent1 sup, .q .verse, .q2 .verse .q2 {position:relative; left:-60px}
+	.indent2 sup {position:absolute; left:-85px}
+	.indent3 sup {position:absolute; left:-110px}
+}
+
+.indent1a, .indent1, .indent2, .indent3 {position:relative; left:0}
+
+h1 {font-size:2rem; line-height:1.4}
+h1 div, h1 span {font-size:1.22rem; line-height: 1.8; color:var(--text_color_screen_medium)}
+h1 span.bVer_KJV, h1 span.bVer_LXX, h1 span.bVer_WEB, h1 span.bVer_CUT, h1 span.bVer_CUS {font-size:2rem; line-height:1.4; padding-left:1rem; padding-right:0}
+
+h2 {font-size:1.75rem; margin-top:4rem; line-height:1.6}
+h3 {font-size:1.6rem; margin-top:3rem; padding-top:0;line-height:1.6}
+h4 {font-size:1.5rem; margin-top:2rem; padding-top:0;line-height:1.6}
+
+/* font weight, color, for print (no margin, no padding) */
+@media print {
+	body {color: var(--text-color); font-weight:400}	/* Roboto light */
+
+	/* font weight, colour */
+	.thin {font-weight:300}
+	.light {font-weight:400}
+	strong, .regular {font-weight:500}
+	h1, h2, h3, .medium {font-weight:600}
+	.bold {font-weight:700; color: var(--text-color)}
+	.extrabold  {font-weight:800; text-decoration:underline dotted 2px}
+	.wj {color:brown}
+
+	/* anchors */
+	.print-links-as-text a, .print-links-as-text a:visited, .print-links-as-text a:active, .print-links-as-text a:hover {color: var(--text-color); text-decoration: none}
+}
+
+/* font weight, color, margin, padding for screen */
+@media screen {
+	body {background-color:var(--body-bgColor); max-width: 50rem; margin: auto; font-weight:500;}	/* Roboto regular */
+	body, h1, div, h1 span  {color:var(--text_color_screen_medium)}	
+	body.textColor1, .textColor1 h1, .textColor1 div, .textColor1 h1 span, .textColor1, a.textColor1, a.textColor1:active, a.textColor1:hover, a.textColor1:visited {color:var(--text_color_screen_light)}
+	body.textColor2, .textColor2, .textColor2 h1, .textColor2 div, .textColor2 h1 span, a.textColor2, a.textColor2:active, a.textColor2:hover, a.textColor2:visited  {color:var(--text_color_screen_medium)}	
+	body.textColor3, .textColor3 h1, .textColor3 div, .textColor3 h1 span, .textColor3, a.textColor3, a.textColor3:active, a.textColor3:hover, a.textColor3:visited  {color:var(--text_color_screen_dark)}
+
+	.wj, body.textColor1 .wj, body.textColor2 .wj {color:var(--wj_text_color1)}
+	body.textColor3 .wj {color:var(--wj_text_color2)}
+
+	.thin {font-weight:400}
+	.light {font-weight:500}
+	strong, .regular {font-weight:600; color: var(--text-color)}
+	h1, h2, h3, .medium {font-weight:700; color: var(--text-color)}
+	.bold  {font-weight:800; color: var(--text-color)}
+	.extrabold  {font-weight:800; text-decoration:underline dotted 2px; color: var(--text-color)}
+
+	/* anchor colour */
+	a strong, a .regularcolor, a.normal strong, a.normal .regularcolor {color: var(--a_color)}
+	a:visited strong, a:visited .regularcolor {color: var(--a_visited_color)}
+}
+
+/* anchors */
+a 					{color: var(--a_color); text-decoration:none}
+a:active, a:hover  	{color: var(--a_color); border-bottom: solid 1px #1f21d9; text-decoration:none}
+a:visited 			{color: var(--a_visited_color)}
+a.normal 			{color: var(--a_color)}	/* blue */
+
+/* headings */
+h1 {margin-bottom:3rem; padding:0; text-align:center; font-stretch:condensed}
+h2, h3, h4 {padding-top:0; font-stretch:condensed}
+.box1 h3, .box1 h4 {margin-top:1rem; text-align:center}
+
+/* spacing */
+.no-top-space {margin-top:0; padding-top:0}
+.no-bottom-space {margin-bottom:0; padding-bottom:0}
+
+.top-spacer-1 {margin-top:1rem}
+.top-spacer-2 {margin-top:2rem}
+.top-spacer-3 {margin-top:3rem}
+.top-spacer-075 {margin-top:0.75rem}
+
+.bottom-spacer-1 {margin-bottom:1rem}
+.bottom-spacer-15 {margin-bottom:1.5rem}
+.bottom-spacer-2 {margin-bottom:2rem}
+.bottom-spacer-3 {margin-bottom:3rem}
+.bottom-spacer-075 {margin-bottom:0.75rem}
+
+.marginL1 {margin-left: 1rem}
+
+/* lists */
+li {margin-bottom:0.75rem; list-style-position:outside}
+ul.float li {float:left; margin-right:1em; list-style-position:outside}
+ul.float2 li {float:left; padding-right:2em; list-style-position:outside}
+ul.float3 li {float:left; padding-right:3em; list-style-position:outside}
+ul.no-bullet {list-style-type:none; margin:0}
+ul.no-indent {margin-left:0; padding-left:0}
+ul.circle	{list-style-type:circle}
+ul li.highlight {color: var(--list_red_bullet_color); list-style-type:square}
+ol.no-top-space, ul.no-top-space, ul.no-top-space {margin-top:0; padding-top:0}
+.compact-list li {margin-bottom:0; list-style-position:outside}
+.compact-list2 li {margin-bottom:.5rem; list-style-position:outside}
+ul.spaced-out>li, ol.spaced-out>li {margin-top:2rem}
+
+/* width */
+.limit-width-normal {max-width:50rem; margin:auto}
+.limit-width-wide {max-width:75rem; margin:auto}
+
+/* font stretch */
+.compressed {font-stretch: condensed}
+
+/* font size */
+.larger2 {font-size:1.2em}
+
+/* text alignment */
+.c {text-align:center}
+.r, .right {text-align:right}
+.l, .left {text-align:left}
+.alignTop	{vertical-align:top}
+.alignMiddle {vertical-align:middle}
+
+/* colour */
+.red {color: var(--red_color)}
+.red2 {color: var(--red2_color)}
+.red3 {color: var(--red3_color)}
+
+.myNote1 {color:var(--quick_note_color); font-style:italic}
+.inline-note {color:var(--inline_note_color); font-size:0.95em}
+
+/* font style */
+.normalStyle {font-style:normal}
+
+/* cursor */
+.cursor	{cursor: pointer}
+
+/* display */
+.nodisplay	{display:none}
+
+/* buttons */
+button {font-size:1.2rem; font-style:normal; font-stretch: condensed; border: 2px solid var(--button_borderColor); padding: 0.4rem .8rem; cursor: pointer; border-radius: 12px}
+
+button:hover {border: 2px solid var(--a_color)}
+
+/* dividers and underlines for screen */
+hr.w15 {width:15rem; max-width:100%; text-align:center}
+hr.w20 {width:20rem; max-width:100%; text-align:center}
+hr.w25 {width:25rem; max-width:100%; text-align:center}
+hr.w30 {width:30rem; max-width:100%; text-align:center}
+hr.w35 {width:35rem; max-width:100%; text-align:center}
+hr.w40 {width:40rem; max-width:100%; text-align:center}
+hr.w45 {width:45rem; max-width:100%; text-align:center}
+hr.w50pc {width:50%; text-align:center}
+@media screen {
+	hr {border:1px dotted var(--hr_regular_color)}
+}
+
+/* dividers and underlines for print */
+@media print {
+	hr {border:0.5pt dotted var(--hr_regular_color)}
+}
+
+/* clearfix */
+.clearfix:after {content:''; display:table; clear:both}
+
+/* nowrap */
+.text-nowrap {white-space: nowrap}
+
+/* grids */
+.grid > div {margin:2px; padding:5px; background-color:var(--grid_bgColor)}
+.grid > div.header {padding:2px; background-color:Gainsboro}
+
+/* tables */
+td {vertical-align:top}
+table.normal-c, table.normalH-c, table.spreadH-c, table.c {margin:auto}
+table.normal-c td {padding:.5rem}
+table.normalH-c td {padding:0 .5rem}
+table.spreadH-c td {padding:.25rem 1.2rem}
+table.compact td {font-size:1.1rem; padding:0.25rem}
+table.compact2 td {font-size:1.1rem; padding:0.25rem 0}
+
+table.border1, table.border2 {border-collapse: collapse}
+table.border1 td {border:solid 1px var(--table_border_color); padding:1rem}
+table.border2 td {border:solid 1px var(--table_border_color); padding:0.25rem}
+td {vertical-align:top}
+
+/* ---- Bible ---- */
+
+.hakkaLnkC {font-size:1rem; padding:0 1rem; text-align:center; position:absolute; top:0; left:0; right:0; margin:auto}
+.hakkaLnkL {font-size:1rem; position:absolute; top:2rem; left:1rem}
+.hakkaLnkR {font-size:1rem; position:absolute; top:0; right:1rem}
+.chin {font-size:1.1rem; letter-spacing:0.12em}	
+
+#color_changer  {font-size:1rem; position:absolute; top:0; left:1rem; letter-spacing:0}
+.chinPage #color_changer {letter-spacing:0.12em}
+#font-sizer {font-size:1rem; position:absolute; top:0; right:1rem}
+#font-sizer a, #font-sizer a:hover, #font-sizer a:visited {border-bottom:none} 
+#verse-styler {font-size:1rem; position:fixed; bottom:6px; right:3px; text-align:center}
+#verse-styler a, #verse-styler a:active, #verse-styler a:hover, #verse-styler a:visited {border-bottom:none}
+
+.main {padding:0 7% 1rem 1.25rem}
+.version_contents .main > div:first-child, 
+.version_contents .main > p:first-child, 
+.version_contents #footnotes {padding-top:0; margin-top:0}
+@media screen {
+	.version_contents .main > div:first-child,
+	.version_contents .main > p:first-child, 
+	.version_contents #footnotes {margin-top:-2.5rem !important}
+}
+
+/** font sizer - class fontsize0/fontsize1/etc. applied to BODY tag thru Javascript **/
+body.fontsize-11 .main, body.fontsize-11 .main a {font-size:78%}
+body.fontsize-10 .main, body.fontsize-10 .main a {font-size:80%}
+body.fontsize-9 .main, body.fontsize-9 .main a {font-size:82%}
+body.fontsize-8 .main, body.fontsize-8 .main a {font-size:84%}
+body.fontsize-7 .main, body.fontsize-7 .main a {font-size:86%}
+body.fontsize-6 .main, body.fontsize-6 .main a {font-size:88%}
+body.fontsize-5 .main, body.fontsize-5 .main a {font-size:90%}
+body.fontsize-4 .main, body.fontsize-4 .main a {font-size:92%}
+body.fontsize-3 .main, body.fontsize-3 .main a {font-size:94%}
+body.fontsize-2 .main, body.fontsize-2 .main a {font-size:96%}
+body.fontsize-1 .main, body.fontsize-1 .main a {font-size:98%}
+body.fontsize0 .main, body.fontsize0 .main a {font-size:100%}
+body.fontsize1 .main, body.fontsize1 .main a {font-size:102%}
+body.fontsize2 .main, body.fontsize2 .main a {font-size:104%}
+body.fontsize3 .main, body.fontsize3 .main a {font-size:106%}
+body.fontsize4 .main, body.fontsize4 .main a {font-size:108%}
+body.fontsize5 .main, body.fontsize5 .main a {font-size:110%}
+body.fontsize6 .main, body.fontsize6 .main a {font-size:112%}
+body.fontsize7 .main, body.fontsize7 .main a {font-size:114%}
+body.fontsize8 .main, body.fontsize8 .main a {font-size:116%}
+body.fontsize9 .main, body.fontsize9 .main a {font-size:118%}
+body.fontsize10 .main, body.fontsize10 .main a {font-size:120%}
+body.fontsize11 .main, body.fontsize11 .main a {font-size:122%}
+body.fontsize12 .main, body.fontsize12 .main a {font-size:124%}
+body.fontsize13 .main, body.fontsize13 .main a {font-size:126%}
+body.fontsize14 .main, body.fontsize14 .main a {font-size:128%}
+
+/* show each verse on a new line - class verseStyle1 applied to BODY tag thru Javascript */
+.verse, .verse_inline	{font-size:.9rem; font-stretch:condensed; line-height:1; vertical-align:super; white-space:nowrap; letter-spacing:0; color:var(--text_color_screen_light)}
+
+.verseStyle1 .chapHdr {margin-bottom:0}
+.verseStyle1 div.p {margin-top:0}
+/*
+.verseStylePsalm.verseStyle1 .verse:before, .verseStyle1 .verse:before,
+.verseStyle1 .verse.firstVerse:before, .verseStyle1 .verse_line.firstVerse:before
+ {content:'\A'; white-space:pre}
+ */
+ .verseStylePsalm.verseStyle1 .verse:before, .verseStyle1 .verse:before,
+.verseStyle1 .verse.firstVerse:before, .verseStyle1 .verse_line.firstVerse:before
+ {content:''; display:block}
+.verseStylePsalm .main p {margin:.425em 0}
+
+.chinPage .verse, .verseStyle1 .verse {position:relative; left:-.35rem}
+
+.topBackLinks {font-size:1rem; line-height:1.7; text-align:center; margin-bottom:1rem}
+.chinPage .topBackLinks, .chinPage .btmBackLinks {font-size:1.1rem}
+.topBackLinks span {padding:0 1rem}
+.topBackLinks span.ap_link, .topBackLinks span.allApLink {padding:0}
+.topBackLinks .versionLinks span.allApLink {padding:0 1rem}
+
+.topBackLinks a {white-space:nowrap}
+
+/* for Psalms in index.html */
+.indexPsalms {line-height:1.5}
+.psalmsNote {font-size:1.05rem; color:var(--text_color_screen_light)}
+.psalmsNote.bVer_CUS, .psalmsNote.bVer_CUT {font-size:1.05rem; color:var(--text_color_screen_light)}
+
+/* for Psalms preview page */
+.toPsalmsBook1 {text-align:right; font-size:1.1rem; padding-bottom:0.2rem}
+.grid_Psalms {display:grid; max-width:100%; grid-template-columns:1fr 1fr 1fr 1fr 1fr; font-size:1.05rem}
+.index_grid {display: grid; width: 100%; grid-template-columns: 2.55em auto}
+.index_grid .index {font-style:italic; text-align:right; padding-right:1rem; letter-spacing:0}
+.index_grid div {padding:0.2rem 0}
+.numRange {font-size:1.25rem; font-style:italic; text-align:center; letter-spacing:0; margin-top:2rem; margin-bottom:.5rem}
+
+/* Apocrypha link */
+.ap_link {display:inline}
+tr.ap_link {display:table-row}
+
+.bVer_KJV, .bVer_LXX, .bVer_WEB, .bVer_CUT, .bVer_CUS	{display:none}
+.tr_KJV, .tr_LXX, .tr_WEB, .tr_CUT, .tr_CUS	{display:none}
+.btmBackLinks {font-size:1rem; line-height:1.7; text-align:center; margin:1rem}
+.mainLinks span {padding:0 0.5rem}
+.verDesc {font-size:1.0rem; line-height:1.5; text-align:center; margin:0}
+.verDesc span {white-space:nowrap; padding:0 .8rem} 
+
+.prevBk, .nxtBk {padding:0 1rem; font-weight:600}
+a.prevBk:hover, a.nxtBk:hover {border-bottom:none}
+
+.goto-top, .goto-btm {font-size:1.1rem; font-stretch:condensed; background-color:rgba(255,255,255,0.8)}
+a.goto-top, a.goto-top:active, a.goto-top:visited,a.goto-btm, a.goto-btm:active, a.goto-btm:visited
+ {border-bottom:none; color:var(--goto_top_color1)}
+a.goto-top:hover {border-bottom:none; color:var(--goto_top_color2); background-color:white}
+#currBook {position:fixed; top:38px; writing-mode:vertical-rl; right:4px; text-align:center; font-size:1rem; line-height:1;font-size:1rem}
+#gtt1 {position:fixed; top:22%; right:4px; text-align:center; font-size:1rem; line-height:.8}
+#gtb1 {position:fixed; top:68%; right:4px; text-align:center; font-size:1rem; line-height:.8}
+
+#engCurrVer {position:fixed; top:34%; writing-mode:vertical-rl; right:0}
+#chinCurrVer {position:fixed; top:34%; writing-mode:vertical-rl; right:0}
+#engCurrVerAP {position:fixed; top:38.5%; writing-mode:vertical-rl; right:0}
+
+#engCurrVer, #chinCurrVer, #engCurrVerAP {text-align:center; font-size:1rem; line-height:1;font-size:1rem; letter-spacing:0; background-color:var(--currVer-bgColor); padding:4px}
+
+#engCurrVer a, #engCurrVerAP a, #chinCurrVer a {
+	color:var(--text_color_screen_medium);
+	background-color:var(--currVer-bgColor);
+	padding:4px;
+	font-size:1rem;
+	letter-spacing:0
+}
+#engCurrVer a:hover, #engCurrVerAP a:hover, #chinCurrVer a:hover {
+	background-color:var(--currVer-hoverColor);
+	cursor:pointer;
+}
+
+#engCurrVer .curr, #engCurrVerAP .curr, #chinCurrVer .curr {
+	font-weight:bold; 
+	color:var(--currVer-color);
+	background-color:var(--currVer-bgColor);
+	padding:4px
+}
+
+#searchMsg  {color:red}
+.search-hilite {background-color:red; color:white}
+
+.book-class {font-size:1.4rem; font-weight:600}
+
+h1.top-index-title-ap {font-size:2.5rem; line-height:1; margin:0 1.5rem 1rem; padding:0}
+h1.top-index-title {font-size:3rem; line-height:1; margin:0 1.5rem 1rem; padding:0}
+h1.top-index-title.chin {font-size:2.55rem}
+h1.top-index-title.chin-cuv {font-size:3rem; letter-spacing:0.2em}
+h1.top-index-title.oneVersion {margin:0 0 .8rem; padding:0}
+h1.index-title {font-size:2.2rem; line-height:1; margin-bottom:1rem}
+h1.book-title, h2.book-title {font-size:2.2rem; line-height:1; margin-bottom:0; padding-bottom:0}
+h1 span.bookName, h2 span.bookNam {font-size:1.5rem; line-height:1; font-stretch:normal}
+.book-title2 {font-size:1.22rem; font-stretch:condensed; line-height:1; font-weight:600; text-align:center; margin-top:.5rem}
+.book-intro {font-size:1.1rem; margin-top:1.5rem; padding-top:0; margin-bottom:2rem; line-height:1.7; margin-bottom:1rem; font-style:italic}
+
+#goto-verse  {font-size: 1.15rem; text-align:center; margin:1rem 0}
+#goto-verse button {padding:2px 8px 4px 8px; font-size:1rem;}
+#goto-verse a:active, #goto-verse a:hover, #goto-verse a:visited {color:var(--goto_verse_color); border-bottom:none}
+
+/* chinese */
+.version-CUT, .version-CUS {font-size:1.07em; line-height:2}
+.version-CUT p, .version-CUS p {margin:0.2em}
+
+/* English on chinPage */
+.eng {letter-spacing:0}
+.chinPage .bVer_KJV, .chinPage .bVer_LXX, .chinPage .bVer_WEB, .chinPage .goto-top, .chinPage #footnotes label {letter-spacing:0; font-family: system-ui, 'Roboto', 'Calibri', sans-serif}
+.chinPage {letter-spacing:0}
+
+/* book index page */
+.indexPage h2 {font-size:1.5rem; font-weight:600; margin:1.25rem 0 0; padding:0}
+.index-title span {padding-right:.5rem}
+.book_index {font-size:1.25rem}
+.book_index h2 {font-size:1.4rem; font-weight:600; margin:3rem 0 0; padding:0}
+.book_index td {padding:0.5rem 0}
+.book_index li {white-space:nowrap; margin:0.25rem 1rem}
+.book_index a {font-size:1.15rem}
+.book_index span {padding:0 .3rem}
+.book_index li a {padding:.45rem}
+.index_letter {font-weight:700; line-height:1.9}
+.book_list {font-size:1.25rem; line-height:1.9; padding-left:1rem}
+.book_list:before {content: '\2022\00a0'; color:red}
+
+/* Psalms chapter index */
+.psalm_index {font-size:1.2rem; padding-top:1rem}
+.psalm_index td {padding-bottom:0.5rem}
+.psalm_index td.num {list-style:outside decimal; font-stretch:condensed; letter-spacing:0; text-align:right; padding-right:0.5rem}
+.psalm_index a {font-size:1.2rem; font-stretch:normal}
+.psalm_index a:hover {background-color:var(--hover_hilite_bgColor)}
+
+/* for each book */
+.chap-menu {display:inline-block; font-size:1rem; line-height:1.5; letter-spacing:0; text-align:left}
+.chap-menu a {padding:0 .5rem}
+.chapHdr {margin:1rem 0; padding:.5rem 1rem}
+.ten:before {content:''; display:block}
+
+.chapNumDiv {position:sticky; position:-webkit-sticky; top:70px; margin-left:94%; font-size:1rem; line-height:1; letter-spacing:0; font-stretch:condensed; text-align:center; background-color:var(--chapNum_bgColor); color:var(--chapNum_text_color)}
+.chapNumCurr {padding:.2rem 0; background-color:var(--chapNum_bgColor); }
+.chapNumDiv a, .chapNumDiv a:visited .chapNumDiv a:active, .chapNumDiv a:hover {
+color:var(--chapNum_text_color); border-bottom:0}
+
+.version-KJV .chapHdr, .version-KJV .otherVer {background-color: var(--KJV_chapHdr_bgColor)}
+.version-LXX .chapHdr, .version-LXX .otherVer {background-color: var(--LXX_chapHdr_bgColor)}
+.version-WEB .chapHdr, .version-WEB .otherVer {background-color: var(--WEB_chapHdr_bgColor)}
+.version-CUT .chapHdr, .version-CUT .otherVer {background-color: var(--CUT_chapHdr_bgColor)}
+.version-CUS .chapHdr, .version-CUS .otherVer {background-color: var(--CUS_chapHdr_bgColor)}
+
+.chapHdr a, .chapHdr a:visited, .chapHdr a:active, .chapHdr a:hover {color:var(--chapHdr_text_color); border-bottom:0}
+
+.otherVer {float:right; font-style:italic; padding:0 .25rem 0 .5rem}
+.otherVer:after {content:''; display:table; clear:both}
+.otherVerC {text-align:center; font-size:1.1rem; line-height:1.3; font-style:italic}
+
+.otherVer a, .otherVerC a, .curVer-outer {margin-right:.3rem; font-weight:500}
+.curVer-inner {padding:1px 0; border-style:solid; border-width:1px 0}
+.chinPage .curVer-inner {padding:2px 0}
+
+.chinVerse {font-style:normal; color:black}
+
+.versionLinks {letter-spacing:0}
+.version_contents {}
+
+@media screen {
+	.print-only	{display:none}
+		
+	.smaller2 {font-size:1.1rem; line-height:1.5}
+	.smaller3 {font-size:1.0rem; line-height:1.5}
+
+	.version-KJV {background-color: var(--version_KJV_bgColor)}
+	.version-LXX {background-color: var(--version-LXX-bgColor)}
+	.version-WEB {background-color: var(--version_WEB_bgColor)}
+	.version-CUT {background-color: var(--version_CUT-bgColor)}
+	.version-CUS {background-color: var(--version_CUS-bgColor)}
+}
+
+.note {color:var(--note_color);	font-style:normal}
+
+/* Bible - added words */
+.add {font-style:italic}
+
+#footnotes table {margin:0 1rem}
+#footnotes td {padding:0.2rem 0;}
+
+#footnotes, #footnotes td, #footnotes .notemark, #footnotes .notebackref {font-size:1.1rem; font-weight:500; vertical-align:top}
+#footnotes td {margin:0; padding:0.2rem 0; color:var(--text_color_screen_medium)}
+#footnotes td.notemark {vertical-align:middle; text-align:right}
+#footnotes .closeCollapse button {font-size:1rem; font-stretch:normal}
+
+.box1 {border: solid 1px #5C5C5C; padding: 0.75rem; margin-top:2rem}
+.invisible {visibility: hidden}
+
+.copyright {font-size:1rem; margin-bottom:1rem; text-align:center}
+.chinPage .copyright {letter-spacing:0}
+
+.changelog {font-size:1rem; line-height:1.4; padding:1rem; background-color:var(--darker_bgColor1)}
+
+@media print {
+	body {font-size:12pt; line-height:1.7}
+
+	h1 {font-size:18pt}
+	h1 div {font-size:12pt; line-height:1.5}
+
+	h2 {margin-top:16pt}
+	h3 {margin-top:15pt}
+	h4 {margin-top:14pt}
+		
+	a {text-decoration: underline}
+	.tocR {display: none}
+	.indent {margin-left:40px}
+	.box1 {padding:12px; margin-top:32px; border-width:1px 1px 1px 1px}
+	.bibleQuote {background-color: transparent; padding:4px}
+	.box1 {padding:4px; margin:4px; page-break-inside:avoid}
+	.parts {margin-bottom:12px; margin-left:16px}
+	.part1 {min-width:200px; float:left}
+	.part2 {float:left; padding-left:48px}
+	.smallMedDev {display: none}
+	.largeDev {display: inline}
+	.noprint {display: none}
+	.print-only {display: block}
+	.scriptureRef, .scriptureRef p, .scriptureRef div, .scriptureRef span, .scriptureRef li, .scriptureRef div, .scriptureRef .like_p, .scriptureRef .like_p * 	{font-size:1.15rem; line-height:1.7}
+	.smaller1 {font-size:0.95em; line-height:1.4}
+	.smaller2 {font-size:0.85em; line-height:1.3}
+	.smaller3 {font-size:0.80em; line-height:1.3}
+}
+
+/*** for collapsible ***/
+.wrap-collapsible {margin:  0; border-style:solid; border-color: var(--collapsible_borderColor); border-width:0}
+.wrap-collapsible .fp, .wrap-collapsible .f, .wrap-collapsible .glo, .wrap-collapsible .x {margin:0}
+.wrap-collapsible.top-spacer-1 {margin-top:1rem}
+
+/* collapsible checkbox */
+.collapsibleCB	{display:none}
+
+/* collapsible title bar */
+.label-toggle {
+	display:block; cursor:pointer; font-weight:600; text-align:center; color:var(--collapsible_label_text_color); padding:0.25rem; border-radius:5px; transition:all .2s ease-out;
+}
+
+.wrap-collapsible .label-toggle {font-size:1.1rem}
+.wrap-collapsible .label-toggle.large1 {font-size:1.5rem; font-weight:500}
+.collapsible-content {border-style:solid;	border-color: var(--collapsible_borderColor); border-width:0}
+.content-inner, .content-inner p {padding:1rem 0.75rem 0 0.75rem}
+.content-inner {background-color: var(--content_inner_bgColor)}
+
+/* collapsible title hover */
+.label-toggle:hover {color: var(--collapsible_hoverColor)}
+
+/* little arrow */
+.label-toggle::before {content:' '; display:inline-block; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:8px solid currentColor; vertical-align:middle; margin-right:.7rem; transform:translateY(-2px); transition:transform .2s ease-out}
+
+/* hide content */
+.collapsible-content {max-height:0px; overflow:hidden; transition:max-height .25s ease-in-out}
+
+/* print smaller arrow when hiding content */
+@media print {
+	.toggle + .label-toggle::before {border-width:4pt}
+}
+
+/* show content */
+.toggle:checked + .label-toggle + .collapsible-content {max-height:100%}
+
+/* 2nd level collapsible - no border */
+.content-inner .toggle:checked + .label-toggle + .collapsible-content {
+	/* border-width: 1px; */
+}
+
+/* rotate arrow when showing content */
+.toggle:checked + .label-toggle::before {
+	transform: rotate(90deg) translateX(-3px);
+}
+
+/* don't printing blank pages if toggle unchecked */
+@media print {
+	.toggle + label + div	{display:none}
+	.toggle:checked + label + div {display:block}
+}
+
+/* do not print arrow when showing content */
+@media print {
+	.toggle:checked + .label-toggle::before {border:0}
+}
+
+.toggle:checked + .label-toggle {
+	border-bottom-right-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.closeCollapse button {font-size:0.9rem; padding:0.3rem 0.8rem 0.4rem}
+
+/* for close collapse button */
+.closeCollapse, p.closeCollapse {text-align:center;	padding-bottom:0.5rem}
+.closeCollapse a {cursor: pointer}
+.noscript_note, #footnotes .noscript_note {font-style:italic; font-size:1.1rem; color:brown}
+
+@media print {
+	.top-links, .topBackLinks, .btmBackLinks, .prevBk, .nxtBk, 
+	#font-sizer, #verse-styler, #btm, .goto-top, #goto-verse, .chap-menu, .otherVer, .closeCollapse,
+	#gtt1, #gtb1, #color_changer, .chapNumDiv,
+	#currBook, #engCurrVer, #engCurrVerAP, #chinCurrVer {display:none}
+	.book-title {font-size:1.5rem}
+	.main {padding:0; margin:0}
+}
+
+/**** You can add custom styles at the bottom of this file ****/
+
+/*
+
+To default font-size to 110%, add this:
+
+	body .main * {font-size:110%}
+*/
+
+/*
+
+To permanently display in paragraph mode for English Bibles (except for Psalms), add this:
+
+	.verseStyle1 .chapHdr {margin:1rem 0}
+	.verseStyle1 div.p {margin-top:.85em}
+	.verseStylePsalm.verseStyle1 .verse:before, .verseStyle1 .verse:before,
+	.verseStyle1 .verse.firstVerse:before, .verseStyle1 .verse_line.firstVerse:before {content:''; white-space:normal}
+	.verseStyle1 .verse.firstVerse:before,
+	.verseStyle1 .verse_line.firstVerse:before
+	 {content:''; white-space:normal}
+	.verseStyle1 .verse {position:inherit}
+
+*/
+
+/*
+
+To show part of each chapter only, add this:
+
+	.main {height:10em; overflow:hidden}
+
+*/
