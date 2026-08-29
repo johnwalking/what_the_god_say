@@ -86,9 +86,28 @@ function render(result, question) {
   el.again.hidden = result.poolSize <= 1;
 }
 
+/** 控制字元不該出現在網址參數裡，一律濾掉。 */
+const 控制字元 = /[\u0000-\u001f\u007f]/g;
+
+/** 從網址讀出問題與位移；參數不合法時當作沒有。 */
+function readURL() {
+  const params = new URLSearchParams(window.location.search);
+  const question = (params.get('q') ?? '').replace(控制字元, '').trim().slice(0, 100);
+  const n = Number.parseInt(params.get('n') ?? '0', 10);
+  return { question, n: Number.isInteger(n) && n >= 0 ? n : 0 };
+}
+
+/** 把目前的問題與位移寫回網址，讓使用者看到什麼、複製出去就是什麼。 */
+function writeURL(question, n) {
+  const params = new URLSearchParams({ q: question });
+  if (n > 0) params.set('n', String(n));
+  window.history.replaceState(null, '', `?${params.toString()}`);
+}
+
 function ask(question, n) {
   目前的問題 = question;
   目前的位移 = n;
+  writeURL(question, n);
   render(answer(question, data, n), question);
 }
 
@@ -107,3 +126,9 @@ el.again.addEventListener('click', () => {
 });
 
 data = await loadData();
+
+const 來自網址 = readURL();
+if (來自網址.question) {
+  el.input.value = 來自網址.question;
+  ask(來自網址.question, 來自網址.n);
+}
