@@ -33,7 +33,7 @@ FALLBACK_BOOKS = {
 }
 
 # 必須帶勸誡語氣，否則讀起來不像在回答你
-ADMONITION_RE = re.compile(r'你|當|不可|凡|務要|要|人若|惟有|豈|乃')
+ADMONITION_RE = re.compile(r'你|當|不可|凡|務要|要|人若|惟有|豈|乃是')
 # 敘事與儀式特徵，一律排除
 NARRATIVE_RE = re.compile(
     r'生了|的兒子|後裔|說、|對他說|耶穌說|回答說|那時|於是|就往|石頭|支派|城邑|祭|燔'
