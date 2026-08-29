@@ -555,7 +555,7 @@ git commit -m "feat: 加入問題比對與選經文邏輯"
 
 - [ ] **Step 1: 寫 topics.json 的前 5 個主題**
 
-以下 20 節經文的文字已逐字核對過 `bible-cut/CUT/`，請原樣貼上、一個字都不要動。
+以下 21 節經文的文字已逐字核對過 `bible-cut/CUT/`，請原樣貼上、一個字都不要動。
 
 `bible-oracle/data/topics.json`：
 
