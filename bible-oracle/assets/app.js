@@ -3,6 +3,7 @@
  * 這裡不放任何業務邏輯 —— 比對規則全在 match.js。
  */
 import { answer } from './match.js';
+import { downloadCard } from './card.js';
 
 /** topics.json 或 fallback.json 掛掉時的緊急經文池，確保網站永遠答得出來。 */
 const 緊急經文池 = [
@@ -44,11 +45,13 @@ const el = {
   ref: document.querySelector('#verse-ref'),
   quip: document.querySelector('#quip'),
   again: document.querySelector('#again'),
+  save: document.querySelector('#save'),
 };
 
 let data = null;
 let 目前的問題 = '';
 let 目前的位移 = 0;
+let 目前的答案 = null;
 
 async function loadJSON(path) {
   const response = await fetch(path);
@@ -107,8 +110,9 @@ function writeURL(question, n) {
 function ask(question, n) {
   目前的問題 = question;
   目前的位移 = n;
+  目前的答案 = answer(question, data, n);
   writeURL(question, n);
-  render(answer(question, data, n), question);
+  render(目前的答案, question);
 }
 
 el.form.addEventListener('submit', (event) => {
@@ -123,6 +127,18 @@ el.form.addEventListener('submit', (event) => {
 
 el.again.addEventListener('click', () => {
   ask(目前的問題, 目前的位移 + 1);
+});
+
+el.save.addEventListener('click', async () => {
+  if (!目前的答案) return;
+  try {
+    await downloadCard(目前的答案, 目前的問題);
+  } catch (error) {
+    console.warn('產圖失敗，改為複製文字：', error);
+    const 文字 = `${目前的答案.text}\n—— ${目前的答案.ref}\n\n${目前的答案.quip}`;
+    await navigator.clipboard.writeText(文字);
+    showNotice('產圖失敗，已改為複製文字到剪貼簿。');
+  }
 });
 
 data = await loadData();
