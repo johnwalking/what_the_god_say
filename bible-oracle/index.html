@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>主的旨意</title>
+<meta name="description" content="把你的煩惱交給主。祂會用經文回答你。">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<main class="page">
+  <header class="masthead">
+    <div class="rule"></div>
+    <h1>主 的 旨 意</h1>
+    <p class="subtitle">凡勞苦擔重擔的人、可以到這裡來</p>
+    <div class="rule"></div>
+  </header>
+
+  <form id="ask-form" class="ask" autocomplete="off">
+    <label for="question" class="visually-hidden">你的煩惱</label>
+    <input id="question" name="question" type="text" maxlength="100"
+           placeholder="說出你的煩惱⋯⋯">
+    <button type="submit">求 問</button>
+  </form>
+
+  <p id="notice" class="notice" hidden></p>
+
+  <section id="answer" class="answer" hidden>
+    <p class="asked">你問：<span id="asked-text"></span></p>
+    <blockquote id="verse-text" class="verse"></blockquote>
+    <cite id="verse-ref" class="ref"></cite>
+    <p id="quip" class="quip"></p>
+    <div class="actions">
+      <button type="button" id="again">再 求 一 次</button>
+    </div>
+  </section>
+
+  <footer class="colophon">
+    <p>經文引自和合本，一字未改。</p>
+  </footer>
+</main>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>

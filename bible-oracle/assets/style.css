@@ -1,0 +1,92 @@
+/* 莊嚴聖經風：米白紙、襯線體、暗金。安靜、無動畫。 */
+:root {
+  --paper: #f4f0e6;
+  --ink: #241f18;
+  --gold: #8a7434;
+  --faded: #7a7266;
+  --serif: "Noto Serif TC", "Songti TC", "PMingLiU", "SimSun", serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 3rem 1.25rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.9;
+}
+
+.page { max-width: 40rem; margin: 0 auto; }
+
+.masthead { text-align: center; margin-bottom: 3rem; }
+.masthead h1 {
+  margin: 1.2rem 0 0.6rem;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+}
+.subtitle { margin: 0 0 1.2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.15em; }
+.rule { height: 1px; background: var(--gold); opacity: 0.55; }
+
+.ask { display: flex; gap: 0.75rem; }
+.ask input {
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(138, 116, 52, 0.5);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1rem;
+}
+.ask input:focus { outline: 1px solid var(--gold); }
+
+button {
+  padding: 0.7rem 1.1rem;
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+button:hover { background: rgba(138, 116, 52, 0.08); }
+
+.notice { margin: 1.5rem 0 0; color: var(--faded); font-size: 0.95rem; }
+
+.answer { margin-top: 3rem; }
+.asked { margin: 0 0 2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.05em; }
+.verse {
+  margin: 0;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 2.1;
+  text-indent: 2em;
+}
+.ref {
+  display: block;
+  margin-top: 1.2rem;
+  text-align: right;
+  font-style: normal;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+}
+.quip {
+  margin: 2.5rem 0 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(138, 116, 52, 0.35);
+  color: var(--faded);
+  font-size: 1rem;
+}
+.actions { margin-top: 2.5rem; display: flex; gap: 0.75rem; }
+
+.colophon { margin-top: 5rem; text-align: center; color: var(--faded); font-size: 0.8rem; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
