@@ -1515,6 +1515,8 @@ for name, _stem, vid, chap, verse, text in iter_verses(CUT_DIR):
 
 **主題清單**（Task 3 已完成前 5 個，以下為其餘 25 個）：
 
+每個主題都要寫**兩組**東西：`keywords`（精準比對用的核心詞）與 `phrases`（向量比對用的自然例句，每題 6–9 句整句、刻意涵蓋關鍵字沒有的講法）。見 Task 8 Step 11 的寫作原則。
+
 | 群組 | id | 主題 | 核心關鍵字（3 分）起頭 |
 |---|---|---|---|
 | 婚姻伴侶 | `husband-complaint` | 老公廢 | 老公、丈夫、先生 |
@@ -1700,4 +1702,466 @@ Expected: PASS，20 個測試全綠
 
 ```bash
 git add bible-oracle/tests/match.test.js && git commit -m "test: 三十個主題的比對 fixture"
+```
+
+---
+
+### Task 8: 向量比對層
+
+在關鍵字與隨機兜底之間插入一層字元 bigram 的 TF-IDF 餘弦相似度，接住「差一點」的問法。
+
+**設計背景（實測數據）：** 17 條真實問法上，純關鍵字表 8 條正確；純向量單獨使用更差（門檻切不乾淨：正確命中只有 0.065，錯誤命中卻有 0.102）；關鍵字優先、落空才用向量的混合策略 17 條全對。另外實測確認**只能用 bigram，不能加 unigram** —— 加了之後「主管每天罵我」會因為與「每天都想死」共用「每」「天」而被判成憂鬱主題。
+
+**Files:**
+- Create: `bible-oracle/assets/vector.js`
+- Create: `bible-oracle/tests/vector.test.js`
+- Modify: `bible-oracle/assets/match.js`
+- Modify: `bible-oracle/tests/match.test.js`
+- Modify: `bible-oracle/data/topics.json`（5 個既有主題各補一組 `phrases`）
+- Modify: `bible-oracle/assets/app.js`（載入資料後建索引）
+
+**Interfaces:**
+- Consumes: Task 2 的 `normalize`
+- Produces:
+  - `vector.js`：`bigramCounts(normalized: string) -> {[gram]: number}`、`buildIndex(docs: {id: string, texts: string[]}[]) -> Index`、`query(index: Index, normalized: string) -> {id: string, score: number}[]`（依分數由高到低）
+  - `match.js`：`COSINE_THRESHOLD = 0.05`、`buildTopicIndex(topics) -> Index`、`pickTopic(normalized, topics, index = null)` 多一個選填參數、`answer(question, data, n)` 的 `data` 多一個選填的 `index` 欄位，回傳物件多一個 `tier: 'keyword' | 'vector' | null` 欄位
+
+- [ ] **Step 1: 寫 vector.js 的失敗測試**
+
+`bible-oracle/tests/vector.test.js`：
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { bigramCounts, buildIndex, query } from '../assets/vector.js';
+
+test('bigramCounts 切出相鄰兩字的組合', () => {
+  assert.deepEqual(bigramCounts('老婆很煩'), { 老婆: 1, 婆很: 1, 很煩: 1 });
+});
+
+test('bigramCounts 累計重複出現的組合', () => {
+  assert.equal(bigramCounts('老婆老婆')['老婆'], 2);
+});
+
+test('bigramCounts 對單一字元回傳空表', () => {
+  assert.deepEqual(bigramCounts('我'), {});
+});
+
+test('bigramCounts 對空字串回傳空表', () => {
+  assert.deepEqual(bigramCounts(''), {});
+});
+
+test('buildIndex 不會產生跨例句邊界的 bigram', () => {
+  // 「老婆」結尾接「老闆」開頭，不可以生出「婆老」這個假組合
+  const index = buildIndex([
+    { id: 'a', texts: ['我老婆', '老闆很爛'] },
+    { id: 'b', texts: ['完全無關的句子'] },
+  ]);
+  const a = index.vectors.find((v) => v.id === 'a');
+  assert.equal(a.vec['婆老'], undefined);
+  assert.ok(a.vec['老婆'] !== undefined || a.vec['老闆'] !== undefined);
+});
+
+test('出現在每一份文件的組合權重為零（不具鑑別力）', () => {
+  const index = buildIndex([
+    { id: 'a', texts: ['老婆'] },
+    { id: 'b', texts: ['老婆'] },
+  ]);
+  assert.equal(index.idf['老婆'], 0);
+});
+
+test('query 依相似度由高到低排序', () => {
+  const index = buildIndex([
+    { id: 'wife', texts: ['我老婆很煩', '太太一直唸我'] },
+    { id: 'boss', texts: ['老闆很爛', '主管針對我'] },
+    { id: 'money', texts: ['我沒錢', '負債好多'] },
+  ]);
+  const ranked = query(index, '我老婆很煩');
+  assert.equal(ranked[0].id, 'wife');
+  assert.ok(ranked[0].score > ranked[1].score);
+});
+
+test('query 對完全無關的輸入給出接近零的分數', () => {
+  const index = buildIndex([
+    { id: 'wife', texts: ['我老婆很煩'] },
+    { id: 'boss', texts: ['老闆很爛'] },
+  ]);
+  const ranked = query(index, '推薦一部電影');
+  assert.ok(ranked[0].score < 0.01, `分數應接近零，實際為 ${ranked[0].score}`);
+});
+
+test('query 對空輸入不拋錯', () => {
+  const index = buildIndex([{ id: 'a', texts: ['我老婆很煩'] }, { id: 'b', texts: ['老闆很爛'] }]);
+  const ranked = query(index, '');
+  assert.equal(ranked.length, 2);
+  assert.equal(ranked[0].score, 0);
+});
+
+test('buildIndex 對空的 docs 不拋錯', () => {
+  const index = buildIndex([]);
+  assert.deepEqual(query(index, '任何東西'), []);
+});
+```
+
+- [ ] **Step 2: 執行測試，確認失敗**
+
+Run: `cd bible-oracle && npm test`
+Expected: FAIL — `Cannot find module .../assets/vector.js`
+
+- [ ] **Step 3: 寫 vector.js**
+
+`bible-oracle/assets/vector.js`：
+
+```js
+/**
+ * 字元 bigram 的 TF-IDF 餘弦相似度。純數學，與聖經無關。
+ *
+ * 刻意不使用 unigram：實測加入單字元特徵後，「我、的、很、每、天」這類
+ * 高頻字會造成假相似 —— 「主管每天罵我」會因為與「每天都想死」共用字元
+ * 而被判成憂鬱主題。
+ */
+
+/** 把已正規化的字串切成字元 bigram 的計數表。 */
+export function bigramCounts(normalized) {
+  const counts = {};
+  for (let i = 0; i < normalized.length - 1; i += 1) {
+    const gram = normalized.slice(i, i + 2);
+    counts[gram] = (counts[gram] || 0) + 1;
+  }
+  return counts;
+}
+
+/** L2 正規化，之後算餘弦相似度只需要做點積。 */
+function l2Normalize(vec) {
+  let sum = 0;
+  for (const gram in vec) sum += vec[gram] * vec[gram];
+  const length = Math.sqrt(sum) || 1;
+  const out = {};
+  for (const gram in vec) out[gram] = vec[gram] / length;
+  return out;
+}
+
+/** 用 idf 加權並正規化。不在 idf 表中的組合權重視為 0，直接略過。 */
+function weigh(counts, idf) {
+  const vec = {};
+  for (const gram in counts) {
+    const weight = idf[gram];
+    if (weight) vec[gram] = counts[gram] * weight;
+  }
+  return l2Normalize(vec);
+}
+
+/**
+ * 建索引。
+ * @param {{id: string, texts: string[]}[]} docs
+ *   texts 必須已經正規化過，且**逐句分開**傳入 —— 不要先串接再切，
+ *   否則會生出跨句邊界的假組合（「我老婆」+「老闆很爛」會生出「婆老」）。
+ */
+export function buildIndex(docs) {
+  const counted = docs.map((doc) => {
+    const merged = {};
+    for (const text of doc.texts) {
+      const counts = bigramCounts(text);
+      for (const gram in counts) merged[gram] = (merged[gram] || 0) + counts[gram];
+    }
+    return { id: doc.id, counts: merged };
+  });
+
+  const documentFrequency = {};
+  for (const doc of counted) {
+    for (const gram in doc.counts) {
+      documentFrequency[gram] = (documentFrequency[gram] || 0) + 1;
+    }
+  }
+
+  const total = counted.length;
+  const idf = {};
+  for (const gram in documentFrequency) {
+    // 出現在每一份文件的組合會得到 0，等於自動被忽略
+    idf[gram] = Math.log((total + 1) / (documentFrequency[gram] + 1));
+  }
+
+  return {
+    idf,
+    vectors: counted.map((doc) => ({ id: doc.id, vec: weigh(doc.counts, idf) })),
+  };
+}
+
+function dot(a, b) {
+  let sum = 0;
+  for (const gram in a) {
+    if (b[gram]) sum += a[gram] * b[gram];
+  }
+  return sum;
+}
+
+/** 查詢，回傳依相似度由高到低排序的 [{id, score}]。 */
+export function query(index, normalized) {
+  const vec = weigh(bigramCounts(normalized), index.idf);
+  return index.vectors
+    .map((entry) => ({ id: entry.id, score: dot(vec, entry.vec) }))
+    .sort((a, b) => b.score - a.score);
+}
+```
+
+- [ ] **Step 4: 執行測試，確認通過**
+
+Run: `cd bible-oracle && npm test`
+Expected: PASS，30 個測試全綠（原本 20 個 + vector.js 的 10 個）
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add bible-oracle/assets/vector.js bible-oracle/tests/vector.test.js
+git commit -m "feat: 加入字元 bigram 的 TF-IDF 向量比對"
+```
+
+- [ ] **Step 6: 寫 match.js 整合的失敗測試**
+
+在 `bible-oracle/tests/match.test.js` 的 import 區加入：
+
+```js
+import { buildTopicIndex, COSINE_THRESHOLD } from '../assets/match.js';
+```
+
+在檔案末尾加入：
+
+```js
+const 帶例句的主題 = [
+  {
+    id: 'wife-complaint',
+    label: '抱怨老婆',
+    keywords: [{ w: '老婆', s: 3 }],
+    phrases: ['我老婆很煩', '太太一直唸我', '內人很難相處', '跟妻子吵架'],
+    verses: [{ ref: '以弗所書 5:22', id: 'Eph5v22', text: '妻一', quip: '補刀一' }],
+  },
+  {
+    id: 'bad-boss',
+    label: '老闆爛',
+    keywords: [{ w: '老闆', s: 3 }],
+    phrases: ['老闆很爛', '主管一直針對我', '想離職', '工作好痛苦想換'],
+    verses: [{ ref: '以弗所書 6:5', id: 'Eph6v5', text: '僕一', quip: '補刀二' }],
+  },
+];
+
+const 帶索引的資料 = {
+  topics: 帶例句的主題,
+  wrappers: ['神的意念高過你的意念。'],
+  fallback: [{ ref: '詩篇 17:6', id: 'Ps17v6', text: '兜底一' }],
+  index: buildTopicIndex(帶例句的主題),
+};
+
+test('COSINE_THRESHOLD 為 0.05', () => {
+  assert.equal(COSINE_THRESHOLD, 0.05);
+});
+
+test('關鍵字命中時不走向量層', () => {
+  const a = answer('我老婆不好', 帶索引的資料);
+  assert.equal(a.topicId, 'wife-complaint');
+  assert.equal(a.tier, 'keyword');
+});
+
+test('關鍵字落空時由向量層接住近似的問法', () => {
+  const a = answer('內人很難相處', 帶索引的資料);
+  assert.equal(a.topicId, 'wife-complaint');
+  assert.equal(a.tier, 'vector');
+});
+
+test('向量層也接得住換句話說的離職問題', () => {
+  const a = answer('我想換工作', 帶索引的資料);
+  assert.equal(a.topicId, 'bad-boss');
+  assert.equal(a.tier, 'vector');
+});
+
+test('兩層都落空才走兜底', () => {
+  const a = answer('推薦一部電影', 帶索引的資料);
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+});
+
+test('沒有提供 index 時退化成純關鍵字比對，不拋錯', () => {
+  const a = answer('內人很難相處', { ...帶索引的資料, index: undefined });
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+});
+
+test('向量層仍然是決定論的', () => {
+  const first = answer('內人很難相處', 帶索引的資料);
+  for (let i = 0; i < 50; i += 1) {
+    assert.equal(answer('內人很難相處', 帶索引的資料).ref, first.ref);
+  }
+});
+```
+
+- [ ] **Step 7: 執行測試，確認失敗**
+
+Run: `cd bible-oracle && npm test`
+Expected: FAIL — `buildTopicIndex` 不是一個匯出
+
+- [ ] **Step 8: 修改 match.js**
+
+在 `match.js` 檔案開頭加入 import：
+
+```js
+import { buildIndex, query } from './vector.js';
+```
+
+在 `THRESHOLD` 下方加入：
+
+```js
+/** 向量層的餘弦相似度門檻。實測 0.02–0.10 對負面案例都無誤判，取中間值。 */
+export const COSINE_THRESHOLD = 0.05;
+```
+
+在 `pickTopic` 上方加入：
+
+```js
+/**
+ * 由主題的 phrases 建向量索引。呼叫端建一次，之後每次查詢重複使用。
+ * 例句逐句傳入，不要先串接 —— 否則會生出跨句邊界的假組合。
+ */
+export function buildTopicIndex(topics) {
+  return buildIndex(
+    topics.map((topic) => ({
+      id: topic.id,
+      texts: (topic.phrases ?? []).map((phrase) => normalize(phrase)),
+    })),
+  );
+}
+```
+
+把 `pickTopic` 整個換成：
+
+```js
+/**
+ * 選主題。兩層：先精準的加權關鍵字，落空才用寬鬆的向量相似度。
+ * @returns {{topic: object, tier: 'keyword'|'vector'} | null}
+ */
+export function pickTopic(normalized, topics, index = null) {
+  const ranked = topics
+    .map((topic) => ({ topic, score: scoreTopic(normalized, topic) }))
+    .filter((entry) => entry.score >= THRESHOLD)
+    .sort((a, b) => b.score - a.score || b.topic.keywords.length - a.topic.keywords.length);
+  if (ranked.length > 0) return { topic: ranked[0].topic, tier: 'keyword' };
+
+  if (!index) return null;
+  const [best] = query(index, normalized);
+  if (!best || best.score < COSINE_THRESHOLD) return null;
+  const topic = topics.find((entry) => entry.id === best.id);
+  return topic ? { topic, tier: 'vector' } : null;
+}
+```
+
+把 `answer` 中取用 `pickTopic` 的那一段改成：
+
+```js
+  const 命中 = pickTopic(normalized, data.topics, data.index ?? null);
+
+  if (命中) {
+    const verse = 命中.topic.verses[(seed + 位移) % 命中.topic.verses.length];
+    return {
+      kind: 'topic',
+      topicId: 命中.topic.id,
+      tier: 命中.tier,
+      ref: verse.ref,
+      verseId: verse.id,
+      text: verse.text,
+      quip: verse.quip,
+      index: 位移,
+      poolSize: 命中.topic.verses.length,
+    };
+  }
+```
+
+並在 fallback 的回傳物件中加入 `tier: null,`（放在 `topicId: null,` 下一行）。
+
+**注意：`pickTopic` 的回傳型別變了**（從 `Topic | null` 變成 `{topic, tier} | null`）。既有測試中直接使用 `pickTopic(...).id` 的三個案例要跟著改成 `pickTopic(...).topic.id`，回傳 null 的案例不用改。
+
+- [ ] **Step 9: 執行測試，確認通過**
+
+Run: `cd bible-oracle && npm test`
+Expected: PASS，37 個測試全綠（vector 10 個 + match 原本 20 個 + 新增 7 個）
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add bible-oracle/assets/match.js bible-oracle/tests/match.test.js
+git commit -m "feat: 比對加入向量層，關鍵字落空時接住近似問法"
+```
+
+- [ ] **Step 11: 為既有 5 個主題補上 phrases**
+
+在 `data/topics.json` 的每個主題中，於 `keywords` 之後加入 `phrases` 欄位。每個主題寫 6–9 句台灣人實際會怎麼講這件事的自然例句：
+
+```json
+      "phrases": [
+        "我老婆很煩", "太太一直唸我", "跟妻子吵架", "另一半很難搞",
+        "老婆脾氣很差", "內人很難相處", "我跟我牽手處不來", "老婆一直碎念"
+      ],
+```
+
+其餘四個主題（`bad-boss`、`money-trouble`、`despair`、`lust-single`）比照辦理。寫例句時的原則：
+
+- 寫**整句**，不要寫詞。「我想換工作」比「換工作」好，因為 bigram 能吃到更多脈絡
+- 刻意涵蓋關鍵字表**沒有**的講法（「內人」「手頭很緊」「不想活」），這才是這一層存在的意義
+- 每個主題至少 6 句，句子之間用字盡量不重複，涵蓋面才廣
+
+- [ ] **Step 12: 驗證原文與測試都沒被弄壞**
+
+```bash
+cd bible-oracle && python3 tools/verify.py && npm test
+```
+
+Expected: `✓ 5 個主題、21 節經文，以及緊急經文池 20 節，全部與原檔一字不差`，且測試 37 個全綠
+
+- [ ] **Step 13: 用真實資料量一次比對品質**
+
+寫一個臨時 node 腳本（跑完刪掉，不要 commit），載入真實的 `topics.json` 與 `fallback.json`，建索引，對以下 17 條問法各跑一次 `answer()`，印出 `tier` 與 `topicId`，並統計正確率：
+
+```
+我老婆很煩 → wife-complaint          內人很難相處 → wife-complaint
+跟太太又吵架了 → wife-complaint       老闆是個王八蛋 → bad-boss
+我想換工作 → bad-boss                主管每天罵我 → bad-boss
+最近手頭很緊 → money-trouble          卡債還不完 → money-trouble
+我好像有點憂鬱 → despair              每天起床都不想活 → despair
+三十歲還沒交過女朋友 → lust-single
+我家的貓不吃飯 → 兜底                 今天天氣真好 → 兜底
+推薦一部電影 → 兜底                   腳踏車壞了 → 兜底
+要不要學法文 → 兜底
+```
+
+**目標是 17/17。** 若有未達標的，先調整該主題的 `phrases`（加一句涵蓋該講法的例句），**不要調 `COSINE_THRESHOLD`，也不要動 `vector.js` 的演算法** —— 例句是內容問題，門檻是結構問題，這兩件事不要混在一起解。把每一輪的結果與你加了哪些例句寫進報告。
+
+- [ ] **Step 14: 在 app.js 建索引**
+
+在 `loadData()` 的 `return` 之前建索引。把成功路徑的 return 改成：
+
+```js
+    const topics = topicsFile.topics;
+    return { topics, wrappers: topicsFile.wrappers, fallback, index: buildTopicIndex(topics) };
+```
+
+失敗路徑（緊急池）的 return 改成：
+
+```js
+    return { topics: [], wrappers: 緊急包裝詞, fallback: 緊急經文池, index: null };
+```
+
+並在 `app.js` 開頭的 import 改成：
+
+```js
+import { answer, buildTopicIndex } from './match.js';
+```
+
+- [ ] **Step 15: 確認整站仍然可用並 commit**
+
+```bash
+cd bible-oracle && npm test && python3 tools/verify.py
+```
+
+Expected: 37 個測試全綠、原文驗證通過
+
+```bash
+git add bible-oracle/data/topics.json bible-oracle/assets/app.js
+git commit -m "feat: 五個主題補上例句，網頁載入時建立向量索引"
 ```
