@@ -136,8 +136,21 @@ el.save.addEventListener('click', async () => {
   } catch (error) {
     console.warn('產圖失敗，改為複製文字：', error);
     const 文字 = `${目前的答案.text}\n—— ${目前的答案.ref}\n\n${目前的答案.quip}`;
-    await navigator.clipboard.writeText(文字);
-    showNotice('產圖失敗，已改為複製文字到剪貼簿。');
+
+    // 嘗試複製文字到剪貼簿
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(文字);
+        showNotice('產圖失敗，已改為複製文字到剪貼簿。');
+      } catch (clipboardError) {
+        console.warn('複製到剪貼簿失敗：', clipboardError);
+        // 剪貼簿無法使用，顯示經文讓使用者自己複製
+        showNotice(`產圖失敗，無法複製，請自行複製下列經文：\n\n${目前的答案.text}\n\n—— ${目前的答案.ref}\n\n${目前的答案.quip}`);
+      }
+    } else {
+      // navigator.clipboard 不存在（非 HTTPS 環境等），顯示經文讓使用者自己複製
+      showNotice(`產圖失敗，無法存取剪貼簿，請自行複製下列經文：\n\n${目前的答案.text}\n\n—— ${目前的答案.ref}\n\n${目前的答案.quip}`);
+    }
   }
 });
 
