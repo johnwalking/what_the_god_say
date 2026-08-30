@@ -2,7 +2,7 @@
  * 接線層：載資料、綁事件、渲染。
  * 這裡不放任何業務邏輯 —— 比對規則全在 match.js。
  */
-import { answer } from './match.js';
+import { answer, buildTopicIndex } from './match.js';
 import { downloadCard } from './card.js';
 
 /** topics.json 或 fallback.json 掛掉時的緊急經文池，確保網站永遠答得出來。 */
@@ -66,10 +66,11 @@ async function loadData() {
       loadJSON('data/topics.json'),
       loadJSON('data/fallback.json'),
     ]);
-    return { topics: topicsFile.topics, wrappers: topicsFile.wrappers, fallback };
+    const topics = topicsFile.topics;
+    return { topics, wrappers: topicsFile.wrappers, fallback, index: buildTopicIndex(topics) };
   } catch (error) {
     console.warn('資料載入失敗，改用緊急經文池：', error);
-    return { topics: [], wrappers: 緊急包裝詞, fallback: 緊急經文池 };
+    return { topics: [], wrappers: 緊急包裝詞, fallback: 緊急經文池, index: null };
   }
 }
 
