@@ -2,9 +2,13 @@
  * 比對邏輯：把使用者的問題對應到一節經文。
  * 純函式，不碰 DOM、不讀檔，所以可以直接在 node 下測試。
  */
+import { buildIndex, query } from './vector.js';
 
 /** 主題命中門檻：至少一個核心詞（3 分），或三個邊緣詞。 */
 export const THRESHOLD = 3;
+
+/** 向量層的餘弦相似度門檻。實測 0.02–0.10 對負面案例都無誤判，取中間值。 */
+export const COSINE_THRESHOLD = 0.05;
 
 const 標點與空白 = /[\s、。，．！？；：「」『』〔〕（）(),.!?;:'"~～\-—]/g;
 
@@ -35,13 +39,35 @@ export function scoreTopic(normalized, topic) {
   return score;
 }
 
-/** 取分數最高且達門檻的主題；同分時取關鍵字表較長者（較具體）。 */
-export function pickTopic(normalized, topics) {
+/**
+ * 由主題的 phrases 建向量索引。呼叫端建一次，之後每次查詢重複使用。
+ * 例句逐句傳入，不要先串接 —— 否則會生出跨句邊界的假組合。
+ */
+export function buildTopicIndex(topics) {
+  return buildIndex(
+    topics.map((topic) => ({
+      id: topic.id,
+      texts: (topic.phrases ?? []).map((phrase) => normalize(phrase)),
+    })),
+  );
+}
+
+/**
+ * 選主題。兩層：先精準的加權關鍵字，落空才用寬鬆的向量相似度。
+ * @returns {{topic: object, tier: 'keyword'|'vector'} | null}
+ */
+export function pickTopic(normalized, topics, index = null) {
   const ranked = topics
     .map((topic) => ({ topic, score: scoreTopic(normalized, topic) }))
     .filter((entry) => entry.score >= THRESHOLD)
     .sort((a, b) => b.score - a.score || b.topic.keywords.length - a.topic.keywords.length);
-  return ranked.length > 0 ? ranked[0].topic : null;
+  if (ranked.length > 0) return { topic: ranked[0].topic, tier: 'keyword' };
+
+  if (!index) return null;
+  const [best] = query(index, normalized);
+  if (!best || best.score < COSINE_THRESHOLD) return null;
+  const topic = topics.find((entry) => entry.id === best.id);
+  return topic ? { topic, tier: 'vector' } : null;
 }
 
 /**
@@ -55,19 +81,20 @@ export function answer(question, data, n = 0) {
   const seed = hashFNV1a(normalized);
   // n 來自網址參數，使用者可竄改；非負整數以外一律當作 0
   const 位移 = Number.isInteger(n) && n >= 0 ? n : 0;
-  const topic = pickTopic(normalized, data.topics);
+  const 命中 = pickTopic(normalized, data.topics, data.index ?? null);
 
-  if (topic) {
-    const verse = topic.verses[(seed + 位移) % topic.verses.length];
+  if (命中) {
+    const verse = 命中.topic.verses[(seed + 位移) % 命中.topic.verses.length];
     return {
       kind: 'topic',
-      topicId: topic.id,
+      topicId: 命中.topic.id,
+      tier: 命中.tier,
       ref: verse.ref,
       verseId: verse.id,
       text: verse.text,
       quip: verse.quip,
       index: 位移,
-      poolSize: topic.verses.length,
+      poolSize: 命中.topic.verses.length,
     };
   }
 
@@ -75,6 +102,7 @@ export function answer(question, data, n = 0) {
   return {
     kind: 'fallback',
     topicId: null,
+    tier: null,
     ref: verse.ref,
     verseId: verse.id,
     text: verse.text,

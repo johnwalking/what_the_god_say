@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalize, hashFNV1a, scoreTopic, pickTopic, answer, THRESHOLD } from '../assets/match.js';
+import { buildTopicIndex, COSINE_THRESHOLD } from '../assets/match.js';
 
 const 抱怨老婆 = {
   id: 'wife-complaint',
@@ -68,13 +69,13 @@ test('pickTopic 低於門檻時回傳 null', () => {
 });
 
 test('pickTopic 取分數最高的主題', () => {
-  assert.equal(pickTopic('我老婆很煩每天都在吵架', data.topics).id, 'wife-complaint');
+  assert.equal(pickTopic('我老婆很煩每天都在吵架', data.topics).topic.id, 'wife-complaint');
 });
 
 test('pickTopic 同分時取關鍵字表較長者（較具體）', () => {
   const 甲 = { id: 'a', label: '甲', keywords: [{ w: '錢', s: 3 }], verses: [] };
   const 乙 = { id: 'b', label: '乙', keywords: [{ w: '錢', s: 3 }, { w: '債', s: 1 }, { w: '窮', s: 1 }], verses: [] };
-  assert.equal(pickTopic('沒錢', [甲, 乙]).id, 'b');
+  assert.equal(pickTopic('沒錢', [甲, 乙]).topic.id, 'b');
 });
 
 test('THRESHOLD 為 3', () => {
@@ -125,4 +126,69 @@ test('負數的 n 被當作 0，不拋錯', () => {
 
 test('非數字的 n 被當作 0，不拋錯', () => {
   assert.equal(answer('我老婆不好', data, NaN).ref, answer('我老婆不好', data, 0).ref);
+});
+
+const 帶例句的主題 = [
+  {
+    id: 'wife-complaint',
+    label: '抱怨老婆',
+    keywords: [{ w: '老婆', s: 3 }],
+    phrases: ['我老婆很煩', '太太一直唸我', '內人很難相處', '跟妻子吵架'],
+    verses: [{ ref: '以弗所書 5:22', id: 'Eph5v22', text: '妻一', quip: '補刀一' }],
+  },
+  {
+    id: 'bad-boss',
+    label: '老闆爛',
+    keywords: [{ w: '老闆', s: 3 }],
+    phrases: ['老闆很爛', '主管一直針對我', '想離職', '工作好痛苦想換'],
+    verses: [{ ref: '以弗所書 6:5', id: 'Eph6v5', text: '僕一', quip: '補刀二' }],
+  },
+];
+
+const 帶索引的資料 = {
+  topics: 帶例句的主題,
+  wrappers: ['神的意念高過你的意念。'],
+  fallback: [{ ref: '詩篇 17:6', id: 'Ps17v6', text: '兜底一' }],
+  index: buildTopicIndex(帶例句的主題),
+};
+
+test('COSINE_THRESHOLD 為 0.05', () => {
+  assert.equal(COSINE_THRESHOLD, 0.05);
+});
+
+test('關鍵字命中時不走向量層', () => {
+  const a = answer('我老婆不好', 帶索引的資料);
+  assert.equal(a.topicId, 'wife-complaint');
+  assert.equal(a.tier, 'keyword');
+});
+
+test('關鍵字落空時由向量層接住近似的問法', () => {
+  const a = answer('內人很難相處', 帶索引的資料);
+  assert.equal(a.topicId, 'wife-complaint');
+  assert.equal(a.tier, 'vector');
+});
+
+test('向量層也接得住換句話說的離職問題', () => {
+  const a = answer('我想換工作', 帶索引的資料);
+  assert.equal(a.topicId, 'bad-boss');
+  assert.equal(a.tier, 'vector');
+});
+
+test('兩層都落空才走兜底', () => {
+  const a = answer('推薦一部電影', 帶索引的資料);
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+});
+
+test('沒有提供 index 時退化成純關鍵字比對，不拋錯', () => {
+  const a = answer('內人很難相處', { ...帶索引的資料, index: undefined });
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+});
+
+test('向量層仍然是決定論的', () => {
+  const first = answer('內人很難相處', 帶索引的資料);
+  for (let i = 0; i < 50; i += 1) {
+    assert.equal(answer('內人很難相處', 帶索引的資料).ref, first.ref);
+  }
 });
