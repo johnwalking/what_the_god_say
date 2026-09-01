@@ -74,16 +74,25 @@ export function buildIndex(docs) {
 
 function dot(a, b) {
   let sum = 0;
+  let overlap = 0;
   for (const gram in a) {
-    if (b[gram]) sum += a[gram] * b[gram];
+    if (b[gram]) {
+      sum += a[gram] * b[gram];
+      overlap += 1;
+    }
   }
-  return sum;
+  return { score: sum, overlap };
 }
 
-/** 查詢，回傳依相似度由高到低排序的 [{id, score}]。 */
+/**
+ * 查詢，回傳依相似度由高到低排序的 [{id, score, overlap}]。
+ * overlap 是查詢與該主題共同擁有的 bigram 數量 —— 呼叫端用它擋掉
+ * 「只靠單一個罕見組合湊巧重疊」的假命中（那種組合 IDF 高，
+ * 在短句上足以獨力把餘弦值推過門檻）。
+ */
 export function query(index, normalized) {
   const vec = weigh(bigramCounts(normalized), index.idf);
   return index.vectors
-    .map((entry) => ({ id: entry.id, score: dot(vec, entry.vec) }))
+    .map((entry) => ({ id: entry.id, ...dot(vec, entry.vec) }))
     .sort((a, b) => b.score - a.score);
 }

@@ -10,6 +10,14 @@ export const THRESHOLD = 3;
 /** 向量層的餘弦相似度門檻。實測 0.02–0.10 對負面案例都無誤判，取中間值。 */
 export const COSINE_THRESHOLD = 0.05;
 
+/**
+ * 向量層最少要重疊幾個 bigram 才採信。
+ * 只重疊一個時，若那個組合恰好罕見（IDF 高），在短句上足以獨力
+ * 把餘弦值推過門檻 ——「我家的貓不吃飯」就是靠單一個「我家」
+ * 命中管教小孩，得分 0.11。要求兩個以上可擋掉這類巧合。
+ */
+export const MIN_OVERLAP = 2;
+
 const 標點與空白 = /[\s、。，．！？；：「」『』〔〕（）(),.!?;:'"~～\-—]/g;
 
 /** 正規化輸入：全形轉半形、去標點空白、轉小寫。中文不需要斷詞。 */
@@ -65,7 +73,7 @@ export function pickTopic(normalized, topics, index = null) {
 
   if (!index) return null;
   const [best] = query(index, normalized);
-  if (!best || best.score < COSINE_THRESHOLD) return null;
+  if (!best || best.score < COSINE_THRESHOLD || best.overlap < MIN_OVERLAP) return null;
   const topic = topics.find((entry) => entry.id === best.id);
   return topic ? { topic, tier: 'vector' } : null;
 }

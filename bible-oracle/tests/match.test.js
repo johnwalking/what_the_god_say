@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { normalize, hashFNV1a, scoreTopic, pickTopic, answer, THRESHOLD } from '../assets/match.js';
 import { buildTopicIndex, COSINE_THRESHOLD } from '../assets/match.js';
 
@@ -190,5 +191,66 @@ test('向量層仍然是決定論的', () => {
   const first = answer('內人很難相處', 帶索引的資料);
   for (let i = 0; i < 50; i += 1) {
     assert.equal(answer('內人很難相處', 帶索引的資料).ref, first.ref);
+  }
+});
+
+/** 載入正式資料並建索引，讓 fixture 走的路徑與網站上線時完全相同。 */
+function 讀真資料() {
+  const topicsFile = JSON.parse(readFileSync(new URL('../data/topics.json', import.meta.url), 'utf8'));
+  return {
+    topics: topicsFile.topics,
+    wrappers: topicsFile.wrappers,
+    fallback: [{ ref: '詩篇 17:6', id: 'Ps17v6', text: '兜底' }],
+    index: buildTopicIndex(topicsFile.topics),
+  };
+}
+
+test('三十個主題各自能被典型問法命中', () => {
+  const 真資料 = 讀真資料();
+  const 樣本 = [
+    ['我老婆不好', 'wife-complaint'],
+    ['老闆很爛想離職', 'bad-boss'],
+    ['我沒錢又欠債', 'money-trouble'],
+    ['好憂鬱好想死', 'despair'],
+    ['我單身好久了', 'lust-single'],
+    ['我老公很廢什麼都不做', 'husband-complaint'],
+    ['我想離婚了', 'divorce'],
+    ['我老公外遇劈腿', 'affair'],
+    ['婆婆很難相處', 'in-laws'],
+    ['身為女性升遷永遠沒我的份', 'woman-at-work'],
+    ['為什麼我不能講道', 'woman-speaking'],
+    ['一直被催生小孩', 'childbirth'],
+    ['生理期好痛', 'menstruation'],
+    ['我是同性戀想出櫃', 'homosexuality'],
+    ['我一直看a片戒不掉', 'porn'],
+    ['每天加班到深夜', 'overtime'],
+    ['我薪水太低了', 'low-pay'],
+    ['同事很機車愛搶功勞', 'bad-colleague'],
+    ['我想中樂透發財', 'get-rich'],
+    ['買不起房子房貸好重', 'buy-house'],
+    ['我在學校被霸凌', 'bullied'],
+    ['朋友背叛我', 'betrayed'],
+    ['我想報復他', 'revenge'],
+    ['我每天都失眠睡不著', 'insomnia'],
+    ['我生病了一直好不了', 'illness'],
+    ['我很怕死', 'fear-of-death'],
+    ['小孩不聽話該不該打', 'discipline-kids'],
+    ['我媽一直催我結婚', 'family-pressure'],
+    ['神真的存在嗎', 'does-god-exist'],
+    ['你是不是在嘲笑基督徒', 'are-you-mocking'],
+  ];
+  assert.equal(樣本.length, 30, '每個主題都要有一條 fixture');
+  const 涵蓋 = new Set(樣本.map(([, id]) => id));
+  assert.equal(涵蓋.size, 30, 'fixture 的主題 id 不可重複');
+  assert.equal(真資料.topics.length, 30, 'topics.json 應有三十個主題');
+  for (const [問, 期望] of 樣本) {
+    assert.equal(answer(問, 真資料).topicId, 期望, `「${問}」應命中 ${期望}`);
+  }
+});
+
+test('冷門問題走兜底', () => {
+  const 真資料 = 讀真資料();
+  for (const 問 of ['我家的貓不吃飯', '今天天氣如何', '推薦一部電影', '腳踏車壞了', '要不要學法文']) {
+    assert.equal(answer(問, 真資料).kind, 'fallback', `「${問}」不該命中任何主題`);
   }
 });
