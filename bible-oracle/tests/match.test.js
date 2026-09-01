@@ -248,6 +248,32 @@ test('三十個主題各自能被典型問法命中', () => {
   }
 });
 
+test('主題經文池為空時不拋錯，改回傳安全兜底結果', () => {
+  const 空池主題 = {
+    id: 'empty-pool-topic',
+    label: '空池主題',
+    keywords: [{ w: '空池測試詞', s: 3 }],
+    verses: [],
+  };
+  const 資料 = { topics: [空池主題], fallback: data.fallback, wrappers: data.wrappers };
+  const a = answer('空池測試詞', 資料);
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+  assert.equal(a.topicId, null);
+  assert.ok(a.ref);
+  assert.ok(a.text);
+});
+
+test('兜底池為空時不拋錯，改回傳安全兜底結果', () => {
+  const 資料 = { topics: [抱怨老婆], fallback: [], wrappers: data.wrappers };
+  const a = answer('今天天氣如何', 資料);
+  assert.equal(a.kind, 'fallback');
+  assert.equal(a.tier, null);
+  assert.equal(a.topicId, null);
+  assert.ok(a.ref);
+  assert.ok(a.text);
+});
+
 test('冷門問題走兜底', () => {
   const 真資料 = 讀真資料();
   for (const 問 of ['我家的貓不吃飯', '今天天氣如何', '推薦一部電影', '腳踏車壞了', '要不要學法文']) {

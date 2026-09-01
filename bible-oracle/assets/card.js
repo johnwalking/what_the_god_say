@@ -114,6 +114,11 @@ export async function downloadCard(result, question) {
   const link = document.createElement('a');
   link.href = url;
   link.download = `主的旨意-${result.ref.replace(/[\s:]/g, '')}.png`;
+  // 部分瀏覽器要求觸發下載的 <a> 已掛在 DOM 上，且過早 revokeObjectURL
+  // 會在下載真的開始前就把 blob 吊銷，所以先掛上、點擊、移除，
+  // revokeObjectURL 延後到下一輪事件迴圈之後再做。
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
