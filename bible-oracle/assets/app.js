@@ -53,6 +53,27 @@ let 目前的問題 = '';
 let 目前的位移 = 0;
 let 目前的答案 = null;
 
+const API_TIMEOUT_MS = 8000;
+let 請求序號 = 0;
+
+/** 呼叫後端；逾時、網路錯誤或非 2xx 一律拋錯，由呼叫端退回靜態比對。 */
+async function fetchOracle(question, n) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch('/api/oracle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: question, n }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`api ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function loadJSON(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`${path} ${response.status}`);
@@ -108,12 +129,32 @@ function writeURL(question, n) {
   window.history.replaceState(null, '', `?${params.toString()}`);
 }
 
-function ask(question, n) {
+async function ask(question, n) {
+  const 序號 = ++請求序號;
   目前的問題 = question;
   目前的位移 = n;
-  目前的答案 = answer(question, data, n);
+  showNotice('求問中⋯');
+
+  let result;
+  try {
+    const body = await fetchOracle(question, n);
+    if (序號 !== 請求序號) return;
+    if (body.kind === 'crisis') {
+      目前的答案 = null;
+      writeURL(question, n);
+      showNotice(body.text);
+      return;
+    }
+    result = { ref: body.ref, text: body.text, quip: body.quip, poolSize: body.pool_size };
+  } catch (error) {
+    console.warn('API 無法使用，改用靜態比對：', error);
+    if (序號 !== 請求序號) return;
+    result = answer(question, data, n);
+  }
+
+  目前的答案 = result;
   writeURL(question, n);
-  render(目前的答案, question);
+  render(result, question);
 }
 
 el.form.addEventListener('submit', (event) => {
