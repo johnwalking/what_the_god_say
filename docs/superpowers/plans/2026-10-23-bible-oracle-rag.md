@@ -4,7 +4,7 @@
 
 **Goal:** 把 `bible-oracle` 升級成本地 RAG 系統（bge-m3 檢索、4B 模型 rerank 與生成、逐字驗證），並產出三種方案的量化評估。
 
-**Architecture:** FastAPI 後端跑六階段流程（安全閘、檢索、rerank、取字、補刀、驗證），LLM 只回傳候選編號，經文由語料庫依編號取出，因此逐字正確由結構保證。每一層失敗都降級，前端在 API 不可用時退回既有靜態比對。`eval/` 對 TF-IDF baseline、embedding、embedding 加 rerank 做消融。
+**Architecture:** FastAPI 後端跑六階段流程（安全閘、混合檢索＝精選庫加全語料、rerank、取字、補刀、驗證），LLM 只回傳候選編號，經文由語料庫依編號取出，因此逐字正確由結構保證。每一層失敗都降級，前端在 API 不可用時退回既有靜態比對。`eval/` 對 TF-IDF baseline、embedding、embedding 加 rerank 做消融。
 
 **Tech Stack:** Python 3.9（venv）、FastAPI、uvicorn、httpx、numpy、sentence-transformers（`BAAI/bge-m3`）、Ollama（Qwen3 4B）、SQLite、pytest；前端沿用原生 ES modules 與 `node --test`。
 
@@ -31,7 +31,7 @@ bible-oracle/
     corpus.py        # Verse / Corpus / load_corpus
     textutil.py      # normalize、fnv1a（與前端 match.js 行為一致）
     embedder.py      # Embedder 協定、HashEmbedder（測試）、BgeM3Embedder
-    retrieve.py      # Retriever、Hit、索引讀寫
+    retrieve.py      # Retriever、HybridRetriever、Hit、索引讀寫
     safety.py        # is_crisis、CARE_MESSAGE
     llm.py           # LLMError、OllamaLLM
     rerank.py        # rerank()：只回傳候選編號
@@ -1095,7 +1095,7 @@ def main(argv: List[str]) -> None:
     if 'b2' in methods:
         from server.cache import Cache
         from server.main import build_default_pipeline
-        rows_by_method['B2 bge-m3 + rerank'] = run_b2(dataset, build_default_pipeline(cache=Cache()))
+        rows_by_method['B2 混合檢索 + rerank'] = run_b2(dataset, build_default_pipeline(cache=Cache()))
 
     summaries = {name: summarize(rows, pools) for name, rows in rows_by_method.items()}
     report = safety_report(dataset)
@@ -1131,6 +1131,147 @@ Expected: 印出兩列 Markdown 表格與安全閘結果（召回 100%、誤攔 
 ```bash
 git add eval/b0.mjs eval/metrics.py eval/run_eval.py eval/test_metrics.py
 git commit -m "feat: 評估指標與 B0 / B1 基準
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 5b: 混合檢索（全語料加精選庫）
+
+背景：Task 5 的檢查點顯示純全語料檢索 B1 的 hit@1 = 4.0%、hit@20 = 22.5%（B0 為 60.9%），錯例多數真的離題。經使用者決定，候選集改為「精選庫（`topics.json` 全部經文，約 180 節）top-k_curated 加全語料補滿」。純全語料的 B1 保留在表格中作消融對照。
+
+**Files:**
+- Modify: `server/retrieve.py`、`server/test_retrieve.py`、`eval/run_eval.py`
+- Test: `server/test_retrieve.py`
+
+**Interfaces:**
+- Consumes: `Retriever`、`Hit`、`Corpus`、`Embedder`
+- Produces:
+  - `retrieve.curated_ids_from_topics(topics_file: dict) -> Set[str]`
+  - `retrieve.HybridRetriever(corpus, matrix, embedder, curated_ids: Set[str], k_curated: int = 10)`：繼承 `Retriever`；`.search(question, k=20) -> List[Hit]` 回傳恰好 `min(k, len(corpus))` 筆（不重複），包含精選庫分數最高的 `k_curated` 筆，其餘名額由全語料排名依序補滿並略過已入選者，最後依分數由高到低排序。`curated_ids` 中沒有任何一個存在於語料時拋 `ValueError`。
+  - `run_eval.run_b1` 不變；`main` 新增方法 `b1h`，表格列名為 `B1h 混合檢索`
+
+- [ ] **Step 1: 寫失敗的測試**
+
+在 `server/test_retrieve.py` 檔尾追加（並在檔頭 import 加入 `HybridRetriever, curated_ids_from_topics`）：
+
+```python
+from server.retrieve import HybridRetriever, curated_ids_from_topics
+
+
+def _hybrid(k_curated=1):
+    corpus, embedder = _corpus(), HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    return HybridRetriever(corpus, matrix, embedder, {'Eph5v22'}, k_curated=k_curated)
+
+
+def test_curated_ids_from_topics_collects_all_verse_ids():
+    topics_file = {'topics': [{'verses': [{'id': 'A'}, {'id': 'B'}]}, {'verses': [{'id': 'B'}, {'id': 'C'}]}]}
+    assert curated_ids_from_topics(topics_file) == {'A', 'B', 'C'}
+
+
+def test_hybrid_always_includes_best_curated_even_if_far_from_query():
+    hits = _hybrid(k_curated=1).search('我欠債好多', k=2)
+    ids = [h.verse.id for h in hits]
+    assert 'Eph5v22' in ids and 'Prov22v7' in ids  # 精選庫的 Eph5v22 被保送，全語料第一名 Prov22v7 也在
+    assert len(ids) == len(set(ids)) == 2
+    assert [h.score for h in hits] == sorted((h.score for h in hits), reverse=True)
+
+
+def test_hybrid_fills_exactly_k_without_duplicates_when_curated_overlaps_full_top():
+    hits = _hybrid(k_curated=1).search('你們作妻子的順服', k=3)
+    ids = [h.verse.id for h in hits]
+    assert len(ids) == len(set(ids)) == 3
+
+
+def test_hybrid_rejects_curated_ids_missing_from_corpus():
+    corpus, embedder = _corpus(), HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    with pytest.raises(ValueError):
+        HybridRetriever(corpus, matrix, embedder, {'NOPE'})
+```
+
+- [ ] **Step 2: 確認失敗**
+
+Run: `.venv/bin/pytest server/test_retrieve.py -q`
+Expected: FAIL（`ImportError: HybridRetriever`）
+
+- [ ] **Step 3: 實作**
+
+在 `server/retrieve.py` 把檔頭的 `from typing import List` 改為 `from typing import List, Set`，並在檔尾追加：
+
+```python
+def curated_ids_from_topics(topics_file: dict) -> Set[str]:
+    return {verse['id'] for topic in topics_file['topics'] for verse in topic['verses']}
+
+
+class HybridRetriever(Retriever):
+    """候選 = 精選庫 top-k_curated，其餘名額由全語料排名補滿。
+
+    純全語料檢索在口語煩惱上常撈到離題的經文（評估見 README）；精選庫是人工挑過、
+    本來就適合拿來回答煩惱的經文，全語料則負責長尾。
+    """
+
+    def __init__(self, corpus: Corpus, matrix: np.ndarray, embedder: Embedder,
+                 curated_ids: Set[str], k_curated: int = 10):
+        super().__init__(corpus, matrix, embedder)
+        self.k_curated = k_curated
+        self._curated_idx = np.array(
+            [i for i, verse in enumerate(corpus.verses) if verse.id in curated_ids], dtype=np.int64
+        )
+        if len(self._curated_idx) == 0:
+            raise ValueError('curated_ids 沒有任何一筆存在於語料中')
+
+    def search(self, question: str, k: int = 20) -> List[Hit]:
+        scores = self.matrix @ self.embedder.encode([question])[0]
+        k = min(k, len(scores))
+
+        curated_scores = scores[self._curated_idx]
+        n_curated = min(self.k_curated, k, len(curated_scores))
+        best = np.argsort(-curated_scores)[:n_curated]
+        chosen = [int(self._curated_idx[i]) for i in best]
+        taken = set(chosen)
+
+        for i in np.argsort(-scores):
+            if len(chosen) >= k:
+                break
+            if int(i) not in taken:
+                chosen.append(int(i))
+                taken.add(int(i))
+
+        chosen.sort(key=lambda i: -scores[i])
+        return [Hit(self.corpus.verses[i], float(scores[i])) for i in chosen]
+```
+
+- [ ] **Step 4: 確認通過**
+
+Run: `.venv/bin/pytest server/test_retrieve.py -q`
+Expected: 全部 passed
+
+- [ ] **Step 5: 接上評估並跑 B1h**
+
+在 `eval/run_eval.py` 的 `main` 內，`if 'b2' in methods:` 之前加入：
+
+```python
+    if 'b1h' in methods:
+        from server.corpus import load_corpus
+        from server.embedder import BgeM3Embedder
+        from server.retrieve import HybridRetriever, curated_ids_from_topics, load_index
+        retriever = HybridRetriever(
+            load_corpus(), load_index(), BgeM3Embedder(), curated_ids_from_topics(load_topics()),
+        )
+        rows_by_method['B1h 混合檢索'] = run_b1(dataset, retriever)
+```
+
+Run: `.venv/bin/python eval/run_eval.py b0 b1 b1h`
+Expected: 三列表格。B1h 的 hit@20 應遠高於 B1 的 22.5%。把表格回報使用者；若 B1h 的 hit@1 低於 B0 也屬正常，交給 B2 的 rerank 去拉高。
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add server/retrieve.py server/test_retrieve.py eval/run_eval.py
+git commit -m "feat: 混合檢索（精選庫加全語料）與 B1h 評估
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
@@ -1987,12 +2128,12 @@ def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
     from server.embedder import BgeM3Embedder
     from server.llm import OllamaLLM
     from server.quip import load_examples
-    from server.retrieve import Retriever, load_index
+    from server.retrieve import HybridRetriever, curated_ids_from_topics, load_index
 
     with open(os.path.join(ROOT, 'data', 'topics.json'), encoding='utf-8') as handle:
         topics_file = json.load(handle)
     corpus = load_corpus()
-    retriever = Retriever(corpus, load_index(), BgeM3Embedder())
+    retriever = HybridRetriever(corpus, load_index(), BgeM3Embedder(), curated_ids_from_topics(topics_file))
     return Pipeline(
         corpus, retriever, OllamaLLM(),
         examples=load_examples(topics_file), wrappers=topics_file['wrappers'],
@@ -2207,9 +2348,9 @@ Expected: 全部 passed
 
 先確認 Ollama 在跑（`ollama list`）。Run（預計約十到二十分鐘）：
 
-`.venv/bin/python eval/run_eval.py b0 b1 b2`
+`.venv/bin/python eval/run_eval.py b0 b1 b1h b2`
 
-Expected: 三列表格、安全閘結果，以及 B2 的 `verbatim: 1.0` 與 `stages` 分佈。把完整輸出回報使用者。若 `verbatim` 不是 1.0，視為嚴重 bug，先查原因（理論上不可能）。
+Expected: 四列表格、安全閘結果，以及 B2 的 `verbatim: 1.0` 與 `stages` 分佈。把完整輸出回報使用者。若 `verbatim` 不是 1.0，視為嚴重 bug，先查原因（理論上不可能）。
 
 - [ ] **Step 6: Commit**
 
@@ -2247,14 +2388,14 @@ def _results():
             {'q': f'題{i}', 'kind': 'topic', 'pick': {'id': f'V{i}', 'ref': f'書 {i}:1', 'text': f'經{i}', 'quip': quip}}
             for i in range(10)
         ]
-    return {'rows': {'B1 bge-m3': rows('b1', None), 'B2 bge-m3 + rerank': rows('b2', '補刀補刀補刀補刀')}}
+    return {'rows': {'B1h 混合檢索': rows('b1', None), 'B2 混合檢索 + rerank': rows('b2', '補刀補刀補刀補刀')}}
 
 
 def test_sample_hides_method_and_is_deterministic():
     batch, key = sample(_results(), n=6, seed=0)
     assert len(batch) == 6 and len(key) == 6
     assert all('method' not in item for item in batch)
-    assert {key[item['id']]['method'] for item in batch} <= {'B1 bge-m3', 'B2 bge-m3 + rerank'}
+    assert {key[item['id']]['method'] for item in batch} <= {'B1h 混合檢索', 'B2 混合檢索 + rerank'}
     assert sample(_results(), n=6, seed=0) == (batch, key)
 
 
@@ -2302,7 +2443,7 @@ from typing import Dict, List, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JUDGE_DIR = os.path.join(HERE, 'judge')
-JUDGED_METHODS = ('B1 bge-m3', 'B2 bge-m3 + rerank')
+JUDGED_METHODS = ('B1h 混合檢索', 'B2 混合檢索 + rerank')
 
 
 def sample(results: dict, n: int = 40, seed: int = 0) -> Tuple[List[dict], Dict[str, dict]]:
