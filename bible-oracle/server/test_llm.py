@@ -42,3 +42,28 @@ def test_connection_failure_becomes_llm_error():
 
     with pytest.raises(LLMError):
         _llm(handler).generate_json('s', 'u', {})
+
+
+@pytest.mark.parametrize('body', [
+    {},
+    {'message': {}},
+    {'message': {'content': None}},
+    {'message': {'content': '[1]'}},
+    {'message': {'content': '3'}},
+    {'message': {'content': 'null'}},
+    {'message': 'oops'},
+    {'message': None},
+    [1, 2],
+    'str',
+])
+def test_malformed_bodies_become_llm_error(body):
+    with pytest.raises(LLMError):
+        _llm(lambda r: httpx.Response(200, json=body)).generate_json('s', 'u', {})
+
+
+def test_timeout_becomes_llm_error():
+    def handler(request):
+        raise httpx.ReadTimeout('slow')
+
+    with pytest.raises(LLMError):
+        _llm(handler).generate_json('s', 'u', {})

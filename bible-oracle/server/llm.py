@@ -31,6 +31,9 @@ class OllamaLLM:
         try:
             response = self._client.post(f'{self.host}/api/chat', json=payload)
             response.raise_for_status()
-            return json.loads(response.json()['message']['content'])
-        except (httpx.HTTPError, KeyError, ValueError) as error:
+            result = json.loads(response.json()['message']['content'])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise LLMError(str(error)) from error
+        if not isinstance(result, dict):
+            raise LLMError(f'回應不是 JSON 物件：{result!r}')
+        return result

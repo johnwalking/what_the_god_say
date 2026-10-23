@@ -23,6 +23,7 @@ def test_prompt_lists_numbered_candidates_and_question():
     system, user = llm.calls[0]
     assert '2. 書 2:1：經文2' in user and '我欠債' in user
     assert '忽略' in system  # 防 prompt injection 的指示
+    assert '我欠債' not in system
 
 
 @pytest.mark.parametrize('bad', [{'choice': 0}, {'choice': 4}, {'choice': 'x'}, {'choice': True}, {}])
@@ -34,3 +35,8 @@ def test_invalid_choice_raises(bad):
 def test_llm_error_propagates():
     with pytest.raises(LLMError):
         rerank(FakeLLM(LLMError('down')), 'q', _hits())
+
+
+def test_non_dict_result_raises_rerank_error():
+    with pytest.raises(RerankError):
+        rerank(FakeLLM([1]), 'q', _hits())

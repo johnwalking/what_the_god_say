@@ -27,6 +27,8 @@ def rerank(llm, question: str, hits: List[Hit]) -> int:
     lines = '\n'.join(f'{i}. {hit.verse.ref}：{hit.verse.text}' for i, hit in enumerate(hits, 1))
     user = f'煩惱：{question}\n\n候選經文：\n{lines}\n\n請只回傳 JSON：{{"choice": 編號}}'
     out = llm.generate_json(SYSTEM, user, SCHEMA, temperature=0.2)
+    if not isinstance(out, dict):
+        raise RerankError(f'非法回應：{out!r}')
     choice = out.get('choice')
     if isinstance(choice, bool) or not isinstance(choice, int) or not 1 <= choice <= len(hits):
         raise RerankError(f'非法編號：{choice!r}')
