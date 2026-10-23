@@ -105,8 +105,20 @@ def main(argv: List[str]) -> None:
             print(f'{name}: {extras}')
 
 
-def run_b2(dataset: List[dict], pipeline) -> List[dict]:  # 於 Task 9 實作
-    raise NotImplementedError
+def run_b2(dataset: List[dict], pipeline) -> List[dict]:
+    rows = []
+    for r in dataset:
+        if r['kind'] != 'topic':
+            continue
+        answer = pipeline.ask(r['q'])
+        order, _ = pipeline.rank(r['q'])
+        rows.append({
+            'q': r['q'], 'kind': r['kind'], 'gold': r['topic_id'],
+            'ranked': order[:20], 'latency_ms': answer.latency_ms, 'stage': answer.stage,
+            'verbatim': answer.text == pipeline.corpus.get(answer.verse_id).text,
+            'pick': {'id': answer.verse_id, 'ref': answer.ref, 'text': answer.text, 'quip': answer.quip},
+        })
+    return rows
 
 
 if __name__ == '__main__':
