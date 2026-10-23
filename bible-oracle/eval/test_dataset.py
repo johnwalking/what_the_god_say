@@ -59,6 +59,9 @@ def _dice(a, b):
     return 2 * len(x & y) / (len(x) + len(y))
 
 
+# 0.4 is the observed gap (max legitimate score 0.38). This test is only a
+# lexical-copy guard; semantic paraphrase leakage is reviewed manually (and only
+# B0 uses `phrases`, so leakage can only favour the baseline).
 NEAR_COPY_THRESHOLD = 0.4
 
 

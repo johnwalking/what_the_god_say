@@ -47,7 +47,7 @@
 {"q": "我明明比他資深，主管卻只讓男同事去帶專案", "kind": "topic", "topic_id": "woman-at-work"}
 {"q": "在公司被當成花瓶，講話沒人認真聽", "kind": "topic", "topic_id": "woman-at-work"}
 {"q": "因為是女生，加薪都輪不到我", "kind": "topic", "topic_id": "woman-at-work"}
-{"q": "同一個企劃，我講沒人理，男同事複述一遍就拍手叫好", "kind": "topic", "topic_id": "woman-at-work"}
+{"q": "升遷名單公布，又是只有男同事上榜，明明我績效比較好", "kind": "topic", "topic_id": "woman-at-work"}
 {"q": "職場上一直被小看，我是不是該換個環境", "kind": "topic", "topic_id": "woman-at-work"}
 {"q": "為什麼教會女生不能當長老", "kind": "topic", "topic_id": "woman-speaking"}
 {"q": "我想在主日分享見證，牧師卻叫我坐著就好", "kind": "topic", "topic_id": "woman-speaking"}
@@ -79,11 +79,11 @@
 {"q": "每天下班都已經晚上，根本沒有自己的時間", "kind": "topic", "topic_id": "overtime"}
 {"q": "為什麼台灣人上班都要加班", "kind": "topic", "topic_id": "overtime"}
 {"q": "連續加班一個月，感覺身體快被榨乾了", "kind": "topic", "topic_id": "overtime"}
-{"q": "薪水三萬出頭，在台北根本不夠", "kind": "topic", "topic_id": "low-pay"}
+{"q": "同樣的工作量，我的薪資級距比業界行情低一大截", "kind": "topic", "topic_id": "low-pay"}
 {"q": "做了五年沒加過薪，老闆還說公司沒賺錢", "kind": "topic", "topic_id": "low-pay"}
 {"q": "新人薪水比我還高，這公平嗎", "kind": "topic", "topic_id": "low-pay"}
 {"q": "辛苦工作領死薪水，看不到未來", "kind": "topic", "topic_id": "low-pay"}
-{"q": "老闆說今年不調薪，我的月薪只夠勉強過日子", "kind": "topic", "topic_id": "low-pay"}
+{"q": "老闆說今年不調薪，可是我的工作量比去年多了一倍", "kind": "topic", "topic_id": "low-pay"}
 {"q": "同事很機車", "kind": "topic", "topic_id": "bad-colleague"}
 {"q": "有個同事專門在老闆面前打小報告，真的很假", "kind": "topic", "topic_id": "bad-colleague"}
 {"q": "同組的人都不做事，我每天幫他們擦屁股", "kind": "topic", "topic_id": "bad-colleague"}
@@ -104,7 +104,7 @@
 {"q": "孩子在學校被同學欺負，我該怎麼幫他", "kind": "topic", "topic_id": "bullied"}
 {"q": "社團聊天室每次我一發言就被嘲諷，我已經不敢講話了", "kind": "topic", "topic_id": "bullied"}
 {"q": "霸凌我的人現在過得很好，這公平嗎", "kind": "topic", "topic_id": "bullied"}
-{"q": "我把他當知己，結果他轉身就把我賣了", "kind": "topic", "topic_id": "betrayed"}
+{"q": "我一直當他是自己人，結果他轉頭就在背後捅我", "kind": "topic", "topic_id": "betrayed"}
 {"q": "合夥的朋友捲款跑了，我超心寒", "kind": "topic", "topic_id": "betrayed"}
 {"q": "閨蜜把我的祕密講出去，我再也不想理她", "kind": "topic", "topic_id": "betrayed"}
 {"q": "被好朋友騙了錢還裝沒事", "kind": "topic", "topic_id": "betrayed"}
@@ -113,7 +113,7 @@
 {"q": "他害我丟了工作，我想整回去", "kind": "topic", "topic_id": "revenge"}
 {"q": "他欺負了我這麼多年，我不會就這樣放過他", "kind": "topic", "topic_id": "revenge"}
 {"q": "前任劈腿又到處說我壞話，我好想報復", "kind": "topic", "topic_id": "revenge"}
-{"q": "我也要他嚐嚐我受過的苦頭，一報還一報", "kind": "topic", "topic_id": "revenge"}
+{"q": "他怎麼對我的，我就要原封不動還給他", "kind": "topic", "topic_id": "revenge"}
 {"q": "晚上躺床上腦袋停不下來，又失眠了", "kind": "topic", "topic_id": "insomnia"}
 {"q": "連續一星期都睡不到四小時，白天快撐不住", "kind": "topic", "topic_id": "insomnia"}
 {"q": "凌晨三點還醒著，明天還要上班", "kind": "topic", "topic_id": "insomnia"}
@@ -131,7 +131,7 @@
 {"q": "人為什麼一定要死", "kind": "topic", "topic_id": "fear-of-death"}
 {"q": "小孩不寫功課還頂嘴，我真的忍不住想罵", "kind": "topic", "topic_id": "discipline-kids"}
 {"q": "孩子三歲每天亂發脾氣，我快崩潰了", "kind": "topic", "topic_id": "discipline-kids"}
-{"q": "兒子不聽話的時候，用藤條教訓他是對的嗎", "kind": "topic", "topic_id": "discipline-kids"}
+{"q": "兒子不聽話的時候，動手打他算不算管教", "kind": "topic", "topic_id": "discipline-kids"}
 {"q": "青春期的兒子什麼都不跟我說，一開口就吵", "kind": "topic", "topic_id": "discipline-kids"}
 {"q": "孩子沉迷手機怎麼管都管不動", "kind": "topic", "topic_id": "discipline-kids"}
 {"q": "媽媽已經幫我排好三場相親了，我完全沒意願", "kind": "topic", "topic_id": "family-pressure"}
