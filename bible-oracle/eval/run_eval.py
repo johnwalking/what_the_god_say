@@ -80,6 +80,14 @@ def main(argv: List[str]) -> None:
         from server.embedder import BgeM3Embedder
         from server.retrieve import Retriever, load_index
         rows_by_method['B1 bge-m3'] = run_b1(dataset, Retriever(load_corpus(), load_index(), BgeM3Embedder()))
+    if 'b1h' in methods:
+        from server.corpus import load_corpus
+        from server.embedder import BgeM3Embedder
+        from server.retrieve import HybridRetriever, curated_ids_from_topics, load_index
+        retriever = HybridRetriever(
+            load_corpus(), load_index(), BgeM3Embedder(), curated_ids_from_topics(load_topics()),
+        )
+        rows_by_method['B1h 混合檢索'] = run_b1(dataset, retriever)
     if 'b2' in methods:
         from server.cache import Cache
         from server.main import build_default_pipeline

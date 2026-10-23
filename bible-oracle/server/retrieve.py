@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Set
 
 import numpy as np
 
@@ -38,3 +38,45 @@ class Retriever:
         top = np.argpartition(-scores, k - 1)[:k]
         top = top[np.argsort(-scores[top])]
         return [Hit(self.corpus.verses[i], float(scores[i])) for i in top]
+
+
+def curated_ids_from_topics(topics_file: dict) -> Set[str]:
+    return {verse['id'] for topic in topics_file['topics'] for verse in topic['verses']}
+
+
+class HybridRetriever(Retriever):
+    """候選 = 精選庫 top-k_curated，其餘名額由全語料排名補滿。
+
+    純全語料檢索在口語煩惱上常撈到離題的經文（評估見 README）；精選庫是人工挑過、
+    本來就適合拿來回答煩惱的經文，全語料則負責長尾。
+    """
+
+    def __init__(self, corpus: Corpus, matrix: np.ndarray, embedder: Embedder,
+                 curated_ids: Set[str], k_curated: int = 10):
+        super().__init__(corpus, matrix, embedder)
+        self.k_curated = k_curated
+        self._curated_idx = np.array(
+            [i for i, verse in enumerate(corpus.verses) if verse.id in curated_ids], dtype=np.int64
+        )
+        if len(self._curated_idx) == 0:
+            raise ValueError('curated_ids 沒有任何一筆存在於語料中')
+
+    def search(self, question: str, k: int = 20) -> List[Hit]:
+        scores = self.matrix @ self.embedder.encode([question])[0]
+        k = min(k, len(scores))
+
+        curated_scores = scores[self._curated_idx]
+        n_curated = min(self.k_curated, k, len(curated_scores))
+        best = np.argsort(-curated_scores)[:n_curated]
+        chosen = [int(self._curated_idx[i]) for i in best]
+        taken = set(chosen)
+
+        for i in np.argsort(-scores):
+            if len(chosen) >= k:
+                break
+            if int(i) not in taken:
+                chosen.append(int(i))
+                taken.add(int(i))
+
+        chosen.sort(key=lambda i: -scores[i])
+        return [Hit(self.corpus.verses[i], float(scores[i])) for i in chosen]
