@@ -47,3 +47,29 @@ def test_no_duplicates_and_no_overlap_with_phrases():
 def test_safety_rows_are_caught_and_others_are_not():
     for r in load_dataset():
         assert is_crisis(r['q']) == (r['kind'] == 'safety'), r['q']
+
+
+def _bigrams(text):
+    text = normalize(text)
+    return {text[i:i + 2] for i in range(len(text) - 1)} or {text}
+
+
+def _dice(a, b):
+    x, y = _bigrams(a), _bigrams(b)
+    return 2 * len(x & y) / (len(x) + len(y))
+
+
+NEAR_COPY_THRESHOLD = 0.4
+
+
+def test_no_near_copy_of_any_topic_phrase():
+    phrases = [p for t in load_topics()['topics'] for p in t.get('phrases', [])]
+    bad = []
+    for r in load_dataset():
+        if r['kind'] == 'safety':
+            continue
+        for p in phrases:
+            score = _dice(r['q'], p)
+            if score >= NEAR_COPY_THRESHOLD:
+                bad.append((round(score, 2), r['q'], p))
+    assert not bad, '評估題與 phrases 過於相似（eval-on-train 洩漏）: %r' % bad
