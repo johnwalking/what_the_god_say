@@ -23,6 +23,33 @@ def test_validate_rejects_bad_quip(bad):
     assert not validate_quip(bad)
 
 
+@pytest.mark.parametrize('bad', [
+    '弟兄，這是主的恩典啊，要感謝🙏', '弟兄，這是主的恩典啊，要感謝✨', '弟兄，這是主的恩典啊，要感謝\u2764\ufe0f',
+    '弟兄，這是主的恩典啊 (^_^)', '弟兄，這是主的恩典啊（T_T）', '弟兄，這是主的恩典啊 ^_^', '弟兄，這是主的恩典啊 T_T',
+    '弟兄，這是主的恩典啊 QQ', '弟兄，這是主的恩典啊 Xd', '弟兄，這是主的恩典啊 xD', '弟兄，這是主的恩典啊 xd',
+    '弟兄，這是主的恩典啊。你要多禱告。再多順服。', '弟兄，這是主的恩典啊。你要多禱告！再多順服',
+])
+def test_validate_rejects_emoji_kaomoji_banned_case_and_too_many_sentences(bad):
+    assert not validate_quip(bad)
+
+
+@pytest.mark.parametrize('good', [
+    '弟兄，欠債是僕人的身分。你只是提早進入服事。',
+    '弟兄，欠債是僕人的身分，你只是提早進入服事（約翰福音）。',
+    '弟兄，欠債、受苦都是主的安排，你只是提早進入服事。',
+    '弟兄，欠債是僕人的身分！你只是提早進入服事？',
+])
+def test_validate_accepts_two_sentences_and_cjk_parenthetical(good):
+    assert validate_quip(good)
+
+
+def test_generate_non_dict_result_counts_as_invalid_attempt():
+    llm = FakeLLM(['not a dict'], {'quip': GOOD})
+    assert generate_quip(llm, '我欠債', VERSE, []) == GOOD
+    with pytest.raises(QuipError):
+        generate_quip(FakeLLM(None, ['x']), '我欠債', VERSE, [])
+
+
 def test_load_examples_spreads_across_topics():
     topics_file = {'topics': [
         {'verses': [{'text': f't{i}', 'quip': f'q{i}'}]} for i in range(10)
