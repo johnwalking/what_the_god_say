@@ -24,6 +24,7 @@ class OllamaLLM:
             'model': self.model,
             'stream': False,
             'think': False,
+            'keep_alive': '30m',
             'format': schema,
             'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],
             'options': {'temperature': temperature, 'num_ctx': 4096, 'num_predict': 300},

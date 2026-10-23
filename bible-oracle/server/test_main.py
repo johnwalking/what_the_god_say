@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from fastapi.testclient import TestClient
 
 from server.fakes import FakeLLM, make_pipeline
@@ -52,3 +54,76 @@ def test_pipeline_exception_becomes_503():
 
     client = TestClient(create_app(Boom()))
     assert client.post('/api/oracle', json={'q': '我欠債'}).status_code == 503
+
+
+class _SpyEmbedder:
+    def __init__(self, error=None):
+        self.calls, self.error = [], error
+
+    def encode(self, texts):
+        self.calls.append(texts)
+        if self.error:
+            raise self.error
+
+
+class _SpyLLM:
+    def __init__(self, error=None):
+        self.calls, self.error = 0, error
+
+    def generate_json(self, system, user, schema, temperature=0.7):
+        self.calls += 1
+        if self.error:
+            raise self.error
+        return {'ok': True}
+
+
+def _spy_pipeline(embedder, llm):
+    from types import SimpleNamespace
+    return SimpleNamespace(retriever=SimpleNamespace(embedder=embedder), llm=llm)
+
+
+def test_warm_up_calls_embedder_and_llm_once():
+    from server.main import warm_up
+    embedder, llm = _SpyEmbedder(), _SpyLLM()
+    warm_up(_spy_pipeline(embedder, llm))
+    assert embedder.calls == [['暖機']] and llm.calls == 1
+
+
+def test_warm_up_swallows_exceptions():
+    from server.main import warm_up
+    embedder, llm = _SpyEmbedder(RuntimeError('x')), _SpyLLM(RuntimeError('y'))
+    warm_up(_spy_pipeline(embedder, llm))
+    assert embedder.calls and llm.calls == 1
+
+
+def test_warm_up_skips_missing_llm():
+    from server.main import warm_up
+    warm_up(_spy_pipeline(_SpyEmbedder(), None))
+
+
+def test_injected_pipeline_is_not_warmed(monkeypatch):
+    import server.main as main
+    called = []
+    monkeypatch.setattr(main, 'warm_up', lambda p: called.append(p))
+    with TestClient(create_app(make_pipeline(FakeLLM()))):
+        pass
+    assert called == []
+
+
+def test_default_pipeline_is_warmed_after_build(monkeypatch):
+    import server.main as main
+    built, called = object(), []
+    monkeypatch.setattr(main, 'build_default_pipeline', lambda: built)
+    monkeypatch.setattr(main, 'warm_up', lambda p: called.append(p))
+    with TestClient(create_app()):
+        pass
+    assert called == [built]
+
+
+def test_rate_limiter_drops_empty_keys():
+    from server.main import RateLimiter
+    limiter = RateLimiter(1, 0.01)
+    assert limiter.allow('a')
+    time.sleep(0.03)
+    assert limiter.allow('b')
+    assert 'a' not in limiter._hits

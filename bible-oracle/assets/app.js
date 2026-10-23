@@ -135,26 +135,31 @@ async function ask(question, n) {
   目前的位移 = n;
   showNotice('求問中⋯');
 
-  let result;
   try {
-    const body = await fetchOracle(question, n);
-    if (序號 !== 請求序號) return;
-    if (body.kind === 'crisis') {
-      目前的答案 = null;
-      writeURL(question, n);
-      showNotice(body.text);
-      return;
+    let result;
+    try {
+      const body = await fetchOracle(question, n);
+      if (序號 !== 請求序號) return;
+      if (body.kind === 'crisis') {
+        目前的答案 = null;
+        writeURL(question, n);
+        showNotice(body.text);
+        return;
+      }
+      result = { ref: body.ref, text: body.text, quip: body.quip, poolSize: body.pool_size };
+    } catch (error) {
+      console.warn('API 無法使用，改用靜態比對：', error);
+      if (序號 !== 請求序號) return;
+      result = answer(question, data, n);
     }
-    result = { ref: body.ref, text: body.text, quip: body.quip, poolSize: body.pool_size };
-  } catch (error) {
-    console.warn('API 無法使用，改用靜態比對：', error);
-    if (序號 !== 請求序號) return;
-    result = answer(question, data, n);
-  }
 
-  目前的答案 = result;
-  writeURL(question, n);
-  render(result, question);
+    目前的答案 = result;
+    writeURL(question, n);
+    render(result, question);
+  } catch (error) {
+    console.warn('顯示答案時出錯：', error);
+    if (序號 === 請求序號) showNotice('出了點問題，請再試一次。');
+  }
 }
 
 el.form.addEventListener('submit', (event) => {

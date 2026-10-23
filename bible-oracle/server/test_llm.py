@@ -24,6 +24,7 @@ def test_generate_json_parses_message_content():
     assert seen['model'] == 'm' and seen['stream'] is False and seen['think'] is False
     assert seen['format'] == {'type': 'object'}
     assert seen['options']['temperature'] == 0.1
+    assert seen['keep_alive'] == '30m'
 
 
 def test_http_error_becomes_llm_error():

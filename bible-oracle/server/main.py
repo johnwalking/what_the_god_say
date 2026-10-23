@@ -13,6 +13,7 @@ from dataclasses import asdict
 from typing import Deque, Dict, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -37,10 +38,16 @@ class RateLimiter:
         self.limit, self.window = limit, window
         self._hits: Dict[str, Deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._last_sweep = time.monotonic()
 
     def allow(self, key: str) -> bool:
         now = time.monotonic()
         with self._lock:
+            if now - self._last_sweep > self.window:
+                self._last_sweep = now
+                for stale in [k for k, q in self._hits.items()
+                              if not q or now - q[-1] > self.window]:
+                    del self._hits[stale]
             hits = self._hits[key]
             while hits and now - hits[0] > self.window:
                 hits.popleft()
@@ -48,6 +55,23 @@ class RateLimiter:
                 return False
             hits.append(now)
             return True
+
+
+def warm_up(pipeline) -> None:
+    """預載 embedding 模型與 Ollama 模型，避免第一位訪客等冷啟動。絕不拋出例外。"""
+    try:
+        pipeline.retriever.embedder.encode(['暖機'])
+    except Exception:
+        log.warning('embedder 暖機失敗', exc_info=True)
+    if getattr(pipeline, 'llm', None) is None:
+        return
+    try:
+        pipeline.llm.generate_json(
+            '只回傳 JSON。', '回傳 ok 為 true。',
+            {'type': 'object', 'properties': {'ok': {'type': 'boolean'}}, 'required': ['ok']},
+        )
+    except Exception:
+        log.warning('LLM 暖機失敗', exc_info=True)
 
 
 def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
@@ -75,6 +99,7 @@ def create_app(pipeline=None, rate_limit: Tuple[int, float] = (20, 60.0)) -> Fas
     async def lifespan(_app: FastAPI):
         if _app.state.pipeline is None:
             _app.state.pipeline = build_default_pipeline()
+            await run_in_threadpool(warm_up, _app.state.pipeline)
         yield
 
     app = FastAPI(title='主的旨意', lifespan=lifespan)
