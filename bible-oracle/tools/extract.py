@@ -9,10 +9,12 @@ import html
 import json
 import os
 import re
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CUT_DIR = os.path.join(HERE, '..', '..', 'bible-cut', 'CUT')
 OUT_PATH = os.path.join(HERE, '..', 'data', 'fallback.json')
+CORPUS_PATH = os.path.join(HERE, '..', 'data', 'corpus.json')
 
 # [^>]* 不可省略：紅字經文寫成 <p id="Matt19v24" class="wj">
 VERSE_RE = re.compile(r'<p id="([A-Za-z0-9]+?)(\d+)v(\d+)"[^>]*>(.*?)</p>', re.S)
@@ -78,7 +80,27 @@ def iter_verses(cut_dir):
             yield name, stem, f'{book}{chap}v{verse}', chap, verse, clean_verse(raw)
 
 
+def build_corpus(cut_dir):
+    """全部經文，不過濾。供 RAG 檢索使用。"""
+    return [
+        {'ref': f'{name} {chap}:{verse}', 'id': verse_id, 'text': text}
+        for name, _stem, verse_id, chap, verse, text in iter_verses(cut_dir)
+        if text
+    ]
+
+
+def write_json(rows, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as handle:
+        json.dump(rows, handle, ensure_ascii=False, separators=(',', ':'))
+    print(f'寫入 {len(rows)} 節到 {os.path.relpath(path)}')
+
+
 def main():
+    if '--corpus' in sys.argv:
+        write_json(build_corpus(CUT_DIR), CORPUS_PATH)
+        return
+
     pool = []
     for name, stem, verse_id, chap, verse, text in iter_verses(CUT_DIR):
         if stem not in FALLBACK_BOOKS:
@@ -87,10 +109,7 @@ def main():
             continue
         pool.append({'ref': f'{name} {chap}:{verse}', 'id': verse_id, 'text': text})
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, 'w', encoding='utf-8') as handle:
-        json.dump(pool, handle, ensure_ascii=False, separators=(',', ':'))
-    print(f'寫入 {len(pool)} 節到 {os.path.relpath(OUT_PATH)}')
+    write_json(pool, OUT_PATH)
 
 
 if __name__ == '__main__':

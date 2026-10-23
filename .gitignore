@@ -1,2 +1,8 @@
 .DS_Store
 .superpowers/
+bible-oracle/.venv/
+bible-oracle/data/corpus.json
+bible-oracle/data/index.npy
+bible-oracle/data/cache.sqlite
+__pycache__/
+.pytest_cache/
