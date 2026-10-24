@@ -6,7 +6,7 @@ import {
   clamp, mulberry32, mat4Perspective, mat4LookAt, mat4Multiply, mat4TransformPoint,
   orbitEye, createOrbit, stepOrbit, ORBIT_DEFAULTS,
 } from './mandala-math.js';
-import { Builder, PART, SHOULDER, HIP, buildCross, planRings, buildRingGeometry } from './mandala-shapes.js';
+import { Builder, PART, HIP, NECK, buildCross, planRings, buildRingGeometry } from './mandala-shapes.js';
 
 // ── 可調常數 ────────────────────────────────────────────────
 const CAM_TARGET = [0, 6.2, 0];          // 相機注視點（十字架中段略上）
@@ -25,8 +25,23 @@ const AMBIENT_SKY = [0.030, 0.026, 0.030];   // 上方環境光（極低）
 const HEAVEN_COLOR = [0.55, 0.5, 0.48];  // 自穹頂向下的微弱頂光（讓兜帽與肩的頂面可辨）
 const AMBIENT_GROUND = [0.012, 0.006, 0.006];// 下方環境光（暗紅反光）
 const CROSS_EMISSIVE = [1.0, 0.82, 0.45];// 十字架自發光色
-const ROBE_COLOR = [0.05, 0.045, 0.05];  // 門徒長袍
-const HOOD_COLOR = [0.035, 0.03, 0.035]; // 兜帽（略深）
+// 門徒長袍色（每位依實例亂數取一：炭黑／暗赭褐／灰燼／褪色牛血紅；皆暗而去飽和）
+const ROBE_TINTS = [[0.085, 0.08, 0.078], [0.11, 0.08, 0.058], [0.13, 0.125, 0.118], [0.12, 0.06, 0.055]];
+const HOOD_SHADE = 0.82;                 // 兜帽與披肩相對長袍的明度
+const SKIN_COLOR = [0.17, 0.115, 0.085]; // 臉與手（多半藏在陰影裡）
+const ROPE_COLOR = [0.15, 0.12, 0.085];  // 腰繩（麻色，壓暗）
+const CLOTH_WRAP = 0.55;                 // 布料包覆光（half-Lambert 類）的包覆量
+const CLOTH_RIM = 0.1;                   // 面向十字架一側的暖色邊緣光強度
+const CLOTH_SHEEN = 0.35;                // 布料掠角光澤
+const CLOTH_BOUNCE = 0.03;               // 地面光池反射到袍子上的暖色補光（乘以 glow）
+const CLOTH_AMB = 3.0;                   // 環境光倍率
+const CLOTH_HEAVEN = 0.35;               // 頂光倍率
+const CAVITY = 0.88;                     // 布褶谷底、兜帽內、袖內的壓暗量
+const CONTACT_MIN = 0.4, CONTACT_H = 0.8;// 袍腳接地處的壓暗（最暗倍率、漸層高度）
+const SHADOW_LEN = 1.2;                  // 門徒在地面上的長影長度（乘以門徒到十字架的距離）
+const SHADOW_STRENGTH = 0.75;            // 長影遮去十字架直射光的比例
+const FLOOR_CONTACT = 0.6;               // 門徒腳下的接觸陰影強度
+const POOL_STRENGTH = 0.05, POOL_R = 9;  // 十字架下方地面的暖色光池（強度乘以 glow、半徑）
 const FLOOR_COLOR = [0.045, 0.036, 0.034];// 地面石色
 const FLOOR_RING_COLOR = [0.42, 0.32, 0.14]; // 地面刻紋（門徒環）的暗金
 const BASE_COLOR = [0.09, 0.07, 0.05];   // 十字架底座
@@ -37,7 +52,8 @@ const CREASE_STRENGTH = 0.45;            // 折角（同物體內法線變化）
 const DECOR_LINE = 0.55;                 // 裝飾環輪廓線相對強度
 const DECOR_DIM = 0.7;                   // 裝飾環顏色亮度倍率
 const DECOR_LIGHT = 0.4;                 // 裝飾環受十字架點光的比例（避免高 glow 時整圈過曝）
-const DISCIPLE_CREASE = 0.1;             // 門徒身上折角線相對強度（只留剪影，避免像一疊方塊）
+const DISCIPLE_CREASE = 0.0;             // 門徒身上折角線相對強度（平滑布料不描折角）
+const DISCIPLE_LINE = 0.3;               // 門徒剪影線相對強度（細而淡，避免方塊感的硬邊）
 const OUTLINE_COLOR = [0.72, 0.58, 0.25];// 輪廓金色
 const OUTLINE_DEPTH_K = 18.0;            // 深度不連續的敏感度
 const OUTLINE_NORMAL_K = 1.6;            // 法線不連續的敏感度
@@ -58,9 +74,14 @@ const DECOR_COUNT = 12;                  // 裝飾環數
 const DECOR_SCALE_JITTER = 0.45;         // 裝飾模組高度隨機變化幅度
 
 const BOW_ANGLE = 0.62;                  // 鞠躬時上身前傾角（弧度）
-const RAISE_ANGLE = 2.15;                // 舉手時手臂繞肩上舉角（弧度）
-const RAISE_SPREAD = 0.5;                // 舉手時雙臂向兩側張開的角度（弧度，呈 V 形）
+const BOW_NOD = 0.3;                     // 鞠躬時兜帽額外低頭角（弧度）
+const RAISE_LOOK_UP = 0.35;              // 舉手時抬頭角（弧度）
 const IDLE_LEAN = 0.1;                   // 平時頭與上身的微微前傾（弧度）
+const IDLE_NOD = 0.12;                   // 平時兜帽的低頭角（弧度）
+const POSTURE_JITTER = 0.1;              // 每位門徒前傾角的隨機差（弧度）
+const HEAD_JITTER = 0.3;                 // 每位門徒點頭／歪頭的隨機差（弧度）
+const HEIGHT_JITTER = 0.08;              // 身高 ±8%
+const GIRTH_JITTER = 0.05;               // 胖瘦 ±5%
 const BREATH_AMP = 0.014;                // 呼吸起伏幅度
 const POSE_RATE = 2.0;                   // 姿勢過渡速率（每秒指數）
 const SPEED_RATE = 1.2;                  // 環轉速過渡速率
@@ -79,26 +100,38 @@ const STATES = Object.freeze({
 
 function smoothstep(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
-const KIND_DECOR = 0, KIND_DISCIPLE = 1, KIND_CROSS = 2;
+const KIND_DECOR = 0, KIND_DISCIPLE = 1;
 
 // ── Shaders ─────────────────────────────────────────────────
+// 場景 shader 以 PASS 巨集編成三支程式（0 裝飾環、1 門徒、2 十字架與地面）：
+// 軟體光柵（SwiftShader 等）會對每個片段執行所有分支，分開編譯可避免為裝飾環付出布料與地面陰影的成本。
+const PASS_DECOR = 0, PASS_DISCIPLE = 1, PASS_CROSS = 2;
+const g3 = (v) => `vec3(${v.map(x => x.toFixed(4)).join(',')})`;
+const withPass = (src, pass) => src.replace('#version 300 es\n', `#version 300 es\n#define PASS ${pass}\n`);
 const SCENE_VS = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNor;
 layout(location=2) in float aPart;
 layout(location=3) in vec2 aInst;      // [slot, random]
+layout(location=4) in vec3 aPos2;      // 舉手姿勢的變形目標
+layout(location=5) in vec3 aNor2;
+layout(location=6) in vec4 aAux;       // 凹處遮蔽、頭部權重、細褶振幅、細褶相位
 uniform mat4 uViewProj;
 uniform vec4 uRing;                    // R, y, spin, N
-uniform float uKind;                   // 0 裝飾、1 門徒、2 十字架與地面
 uniform vec4 uPose;                    // bow, raise, time, breath
-uniform vec3 uShoulder, uHip;
+uniform vec3 uNeck, uHip;
 uniform vec2 uCut;                     // 相機水平方向（剖開方向）
 uniform vec3 uCutParams;               // cos 閾值, 過渡寬度, 高度隨機幅度
+uniform vec3 uColor;
+uniform vec3 uTints[4];                // 門徒袍色
 out vec3 vNor;
 out vec3 vWorld;
 flat out float vPart;
-flat out float vFace;                 // 1 = 門徒兜帽內的臉（塗黑）
+flat out vec3 vAlbedo;
+#if PASS == 1
+out vec4 vAux;                         // 凹處遮蔽、局部高度、細褶振幅、細褶相位
+#endif
 
 mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }
 
@@ -106,38 +139,48 @@ void main() {
   vec3 p = aPos, n = aNor;
   float rnd = aInst.y;
   float scale = 1.0;
-  if (uKind > 0.5 && uKind < 1.5) {
-    // 門徒姿勢：先手臂繞肩上舉，再上身繞髖前傾，最後呼吸
-    if (aPart > 1.5 && aPart < 2.5) {
-      float a = -uPose.y * ${RAISE_ANGLE.toFixed(3)};
-      p.xy = uShoulder.xy + rot(a) * (p.xy - uShoulder.xy);
-      n.xy = rot(a) * n.xy;
-      float sp = sign(aPos.z) * uPose.y * ${RAISE_SPREAD.toFixed(3)};
-      p.zy = uShoulder.zy + rot(sp) * (p.zy - uShoulder.zy);
-      n.zy = rot(sp) * n.zy;
-    }
-    float w = smoothstep(uHip.y - 0.4, uHip.y + 1.4, p.y);
-    float lean = (${IDLE_LEAN.toFixed(3)} + uPose.x * ${BOW_ANGLE.toFixed(3)} - uPose.y * 0.22 + (rnd - 0.5) * 0.06) * w;
-    p.xy = uHip.xy + rot(lean) * (p.xy - uHip.xy);
-    n.xy = rot(lean) * n.xy;
-    p.y *= 1.0 + uPose.w * ${BREATH_AMP.toFixed(4)} * sin(uPose.z * 1.1 + rnd * 6.2832) * w;
-    scale = 0.94 + 0.12 * rnd;
-  } else if (uKind < 0.5) {
-    p.y *= 1.0 - uCutParams.z * 0.5 + uCutParams.z * rnd;
-  }
+  vec3 albedo = uColor;
+#if PASS == 1
+  float r2 = fract(rnd * 7.31 + 0.13), r3 = fract(rnd * 13.7 + 0.71);
+  // 舉手：合掌姿勢與舉手張掌姿勢之間平滑變形（只有袖與手的兩組位置不同）
+  p = mix(aPos, aPos2, uPose.y);
+  n = mix(aNor, aNor2, uPose.y);
+  // 兜帽點頭／歪頭：以頭部權重平滑混合，兜帽垂到肩上的部分不動，不會撕裂
+  float hw = aAux.y;
+  float nod = (${IDLE_NOD.toFixed(3)} + (r2 - 0.5) * ${HEAD_JITTER.toFixed(3)} + uPose.x * ${BOW_NOD.toFixed(3)} - uPose.y * ${RAISE_LOOK_UP.toFixed(3)}) * hw;
+  float tilt = (r3 - 0.5) * ${HEAD_JITTER.toFixed(3)} * (1.0 - 0.6 * uPose.y) * hw;
+  p.xy = uNeck.xy + rot(nod) * (p.xy - uNeck.xy);
+  n.xy = rot(nod) * n.xy;
+  p.zy = uNeck.zy + rot(tilt) * (p.zy - uNeck.zy);
+  n.zy = rot(tilt) * n.zy;
+  // 上身繞髖前傾（鞠躬）；權重沿高度平滑
+  float w = smoothstep(uHip.y - 0.4, uHip.y + 1.4, p.y);
+  float lean = (${IDLE_LEAN.toFixed(3)} + uPose.x * ${BOW_ANGLE.toFixed(3)} - uPose.y * 0.22 + (rnd - 0.5) * ${POSTURE_JITTER.toFixed(3)}) * w;
+  p.xy = uHip.xy + rot(lean) * (p.xy - uHip.xy);
+  n.xy = rot(lean) * n.xy;
+  p.y *= 1.0 + uPose.w * ${BREATH_AMP.toFixed(4)} * sin(uPose.z * 1.1 + rnd * 6.2832) * w;
+  // 每位的身高與胖瘦
+  p.y *= 1.0 + (rnd * 2.0 - 1.0) * ${HEIGHT_JITTER.toFixed(3)};
+  p.xz *= 1.0 + (r2 * 2.0 - 1.0) * ${GIRTH_JITTER.toFixed(3)};
+  int ti = int(floor(fract(rnd * 3.71 + aInst.x * 0.29 + uRing.x * 0.173) * 4.0));
+  albedo = uTints[ti] * (0.9 + 0.2 * r3);
+  vAux = vec4(aAux.x, aPos.y, aAux.z, aAux.w);
+#elif PASS == 0
+  p.y *= 1.0 - uCutParams.z * 0.5 + uCutParams.z * rnd;
+#endif
   float th = uRing.z + 6.2831853 * aInst.x / uRing.w;
   float c = cos(th), s = sin(th);
-  if (uKind < 0.5) {
-    // 面向相機那側的裝飾模組縮小消失（剖面），讓十字架與門徒不被遮住
-    float facing = dot(vec2(c, s), uCut);
-    scale *= smoothstep(uCutParams.x + uCutParams.y, uCutParams.x, facing);
-  }
+#if PASS == 0
+  // 面向相機那側的裝飾模組縮小消失（剖面），讓十字架與門徒不被遮住
+  float facing = dot(vec2(c, s), uCut);
+  scale *= smoothstep(uCutParams.x + uCutParams.y, uCutParams.x, facing);
+#endif
   p *= scale;
   vec3 wp = vec3(uRing.x * c + p.x * c - p.z * s, uRing.y + p.y, uRing.x * s + p.x * s + p.z * c);
   vNor = vec3(n.x * c - n.z * s, n.y, n.x * s + n.z * c);
   vWorld = wp;
   vPart = aPart;
-  vFace = (uKind > 0.5 && uKind < 1.5 && aPart > 0.5 && aPart < 1.5 && aNor.x < -0.5 && aPos.x > -0.34 && aPos.y < 4.1) ? 1.0 : 0.0;
+  vAlbedo = albedo;
   gl_Position = uViewProj * vec4(wp, 1.0);
 }`;
 
@@ -146,59 +189,126 @@ precision highp float;
 in vec3 vNor;
 in vec3 vWorld;
 flat in float vPart;
-flat in float vFace;
-uniform float uKind;
-uniform vec3 uColor, uHoodColor, uBaseColor;
+flat in vec3 vAlbedo;
+#if PASS == 1
+in vec4 vAux;
+#endif
+uniform vec3 uBaseColor, uEye;
 uniform vec3 uLightPos, uLightColor;
 uniform float uLightStrength, uGlow;
 uniform vec3 uAmbSky, uAmbGround, uEmissive, uHeaven;
 uniform vec3 uFloorColor, uFloorRing;
 uniform vec3 uDiscipleR;               // 三圈門徒半徑（地面刻紋）
+uniform vec3 uDiscRing[3];             // 三圈門徒 (半徑, 自轉角, 人數)：每圈只取角度最近的一位算長影
+uniform int uDiscRingN;
 layout(location=0) out vec4 oColor;
 layout(location=1) out vec4 oNormal;
 
 void main() {
   vec3 n = normalize(vNor);
-  bool emissive = vPart > 2.5;
-  vec3 albedo = uColor;
-  bool isFloor = uKind > 1.5 && vWorld.y < 0.005 && n.y > 0.5 && !emissive;
-  if (uKind > 0.5 && uKind < 1.5 && vPart > 0.5 && vPart < 1.5) albedo = uHoodColor;
-  if (uKind > 1.5 && !emissive) albedo = uBaseColor;
-  float floorRing = 0.0;
-  if (isFloor) {
-    albedo = uFloorColor;
-    float r = length(vWorld.xz);
-    float ring = 0.0;
-    for (int i = 0; i < 3; i++) ring = max(ring, 1.0 - smoothstep(0.03, 0.09, abs(r - uDiscipleR[i] - 1.35)));
-    ring = max(ring, 1.0 - smoothstep(0.03, 0.09, abs(r - 3.2)));
-    floorRing = ring;
-    // 石板接縫：同心環
-    float seam = smoothstep(0.93, 0.99, abs(fract(r / 3.4) - 0.5) * 2.0);
-    albedo *= 1.0 - 0.35 * seam;
-  }
+  vec3 albedo = vAlbedo;
+  vec3 L = uLightPos - vWorld;
+  float d = length(L);
+  L /= d;
+  float att = uLightStrength / (1.0 + ${LIGHT_FALLOFF} * d * d);
   vec3 col;
+  float flag;                          // a：1 自發光、0.5 地面、0.25 裝飾環、0.125 十字架底座、0 門徒
+#if PASS == 1
+  // 布料：包覆光 + 面向十字架的暖色邊緣光 + 掠角光澤 + 凹處與接地壓暗
+  if (vPart > 0.5 && vPart < 1.5) albedo *= ${HOOD_SHADE.toFixed(3)};
+  else if (vPart > 3.5 && vPart < 4.5) albedo = ${g3(SKIN_COLOR)};
+  else if (vPart > 4.5) albedo = ${g3(ROPE_COLOR)};
+  float localY = vAux.y;
+  if (vAux.z > 0.0) {
+    // 細褶法線：沿水平切線擾動（相位為繞身體的角度，整數頻率不會在接縫斷開）
+    vec3 T = cross(vec3(0.0, 1.0, 0.0), n);
+    float tl = length(T);
+    if (tl > 0.05) {
+      float a = vAux.w;
+      float f = vPart > 4.5 ? sin(a)
+        : 0.6 * sin(13.0 * a + 0.9 * sin(localY * 1.7 + a * 2.0)) + 0.4 * sin(22.0 * a - 1.1 * localY);
+      n = normalize(n + (T / tl) * f * vAux.z);
+    }
+  }
+  vec3 V = normalize(uEye - vWorld);
+  float ndl = dot(n, L);
+  float wrap = clamp((ndl + ${CLOTH_WRAP.toFixed(2)}) / ${(1 + CLOTH_WRAP).toFixed(2)}, 0.0, 1.0);
+  wrap *= wrap;
+  float ndv = clamp(dot(n, V), 0.0, 1.0);
+  float fres = (1.0 - ndv) * (1.0 - ndv) * (1.0 - ndv);
+  float behind = clamp(dot(-V, L) * 0.5 + 0.5, 0.0, 1.0);   // 光在物體後方（逆光）時邊緣更亮
+  float rim = fres * smoothstep(-0.25, 0.4, ndl) * (0.35 + 0.65 * behind);
+  float sheen = (1.0 - ndv) * (1.0 - ndv) * wrap;
+  float cav = 1.0 - ${CAVITY.toFixed(2)} * vAux.x;
+  float contact = mix(${CONTACT_MIN.toFixed(2)}, 1.0, smoothstep(0.0, ${CONTACT_H.toFixed(2)}, localY));
+  vec3 Lc = uLightColor * att;
+  vec3 amb = mix(uAmbGround, uAmbSky, n.y * 0.5 + 0.5);
+  vec3 bounce = uLightColor * uGlow * ${CLOTH_BOUNCE.toFixed(3)} * (0.6 + 0.4 * max(-n.y, 0.0));
+  col = albedo * (amb * ${CLOTH_AMB.toFixed(2)} + uHeaven * max(n.y, 0.0) * ${CLOTH_HEAVEN.toFixed(2)}
+                  + Lc * (wrap + ${CLOTH_SHEEN.toFixed(2)} * sheen) + bounce) * cav * contact;
+  col += Lc * rim * ${CLOTH_RIM.toFixed(3)} * mix(1.0, cav, 0.7) * contact;
+  flag = 0.0;
+#else
+  bool emissive = vPart > 2.5 && vPart < 3.5;
+#if PASS == 2
+  bool isFloor = vWorld.y < 0.005 && n.y > 0.5 && !emissive;
+  if (!emissive) albedo = uBaseColor;
+#else
+  bool isFloor = false;
+#endif
   if (emissive) {
     vec3 hot = mix(uEmissive, vec3(1.0, 0.95, 0.85), clamp(uGlow - 0.6, 0.0, 1.0) * 0.6);
     // 縱向略有明暗，讓十字架有體積感
     float shade = 0.72 + 0.28 * abs(n.x) + 0.12 * n.y;
     col = hot * (0.55 + 0.45 * clamp(uGlow, 0.0, 1.6)) * shade;
   } else {
-    vec3 L = uLightPos - vWorld;
-    float d = length(L);
-    L /= d;
     float lam = max(dot(n, L), 0.0);
     float wrap = max(dot(n, L) * 0.5 + 0.5, 0.0);
-    float att = uLightStrength / (1.0 + ${LIGHT_FALLOFF} * d * d) * (uKind < 0.5 ? ${DECOR_LIGHT.toFixed(2)} : 1.0);
     vec3 amb = mix(uAmbGround, uAmbSky, n.y * 0.5 + 0.5);
-    // 頂光：門徒長袍的階面壓低，避免一層層亮線讓人形看起來像疊塔
-    float heaven = (uKind > 0.5 && uKind < 1.5 && vPart < 0.5) ? 0.3 : 1.0;
-    col = albedo * (amb * 3.0 + uHeaven * max(n.y, 0.0) * heaven + uLightColor * att * (lam * 0.85 + wrap * 0.15));
-    if (vFace > 0.5) col = vec3(0.0);
-    if (isFloor) col += uFloorRing * floorRing * (0.35 + 0.65 * clamp(att / 6.0, 0.0, 1.0));
+#if PASS == 0
+    vec3 direct = uLightColor * att * ${DECOR_LIGHT.toFixed(2)} * (lam * 0.85 + wrap * 0.15);
+    col = albedo * (amb * 3.0 + uHeaven * max(n.y, 0.0) + direct);
+#else
+    vec3 direct = uLightColor * att * (lam * 0.85 + wrap * 0.15);
+    if (isFloor) {
+      albedo = uFloorColor;
+      float r = length(vWorld.xz);
+      float ring = 0.0;
+      for (int i = 0; i < 3; i++) ring = max(ring, 1.0 - smoothstep(0.03, 0.09, abs(r - uDiscipleR[i] - 1.35)));
+      ring = max(ring, 1.0 - smoothstep(0.03, 0.09, abs(r - 3.2)));
+      // 石板接縫：同心環
+      float seam = smoothstep(0.93, 0.99, abs(fract(r / 3.4) - 0.5) * 2.0);
+      albedo *= 1.0 - 0.35 * seam;
+      // 門徒擋住十字架光的長影（自十字架向外放射）與腳下的接觸陰影；每圈只取角度最近的一位
+      float sh = 0.0, ao = 0.0;
+      float phi = atan(vWorld.z, vWorld.x);
+      for (int i = 0; i < 3; i++) {
+        if (i >= uDiscRingN) break;
+        vec3 dr = uDiscRing[i];
+        float stp = 6.2831853 / dr.z;
+        float th = dr.y + stp * floor((phi - dr.y) / stp + 0.5);
+        vec2 u = vec2(cos(th), sin(th)), q = vWorld.xz - u * dr.x;
+        float along = dot(q, u), perp = abs(q.x * u.y - q.y * u.x);
+        float w = 0.5 + 0.05 * max(along, 0.0);
+        float s = smoothstep(-0.6, 0.2, along) * (1.0 - smoothstep(0.0, dr.x * ${SHADOW_LEN.toFixed(2)}, along)) * (1.0 - smoothstep(w * 0.45, w, perp));
+        sh = max(sh, s);
+        ao = max(ao, exp(-dot(q, q) * 1.4));
+      }
+      float lit = 1.0 - ${SHADOW_STRENGTH.toFixed(2)} * sh;
+      col = albedo * (amb * 3.0 + uHeaven + direct * lit);
+      // 十字架下方的暖色光池（被長影切開）
+      col += uLightColor * uGlow * ${POOL_STRENGTH.toFixed(3)} * exp(-r * r / ${(POOL_R * POOL_R).toFixed(1)}) * lit;
+      col += uFloorRing * ring * (0.35 + 0.65 * clamp(att / 6.0, 0.0, 1.0)) * (1.0 - 0.6 * sh);
+      col *= 1.0 - ${FLOOR_CONTACT.toFixed(2)} * ao;
+    } else {
+      col = albedo * (amb * 3.0 + uHeaven * max(n.y, 0.0) + direct);
+    }
+#endif
   }
+  flag = emissive ? 1.0 : (isFloor ? 0.5 : (PASS == 0 ? 0.25 : 0.125));
+#endif
   oColor = vec4(col, 1.0);
-  // a：1 自發光、0.5 地面、0.25 裝飾環、0 其他
-  oNormal = vec4(n * 0.5 + 0.5, emissive ? 1.0 : (isFloor ? 0.5 : (uKind < 0.5 ? 0.25 : 0.0)));
+  oNormal = vec4(n * 0.5 + 0.5, flag);
 }`;
 
 const POST_VS = `#version 300 es
@@ -262,12 +372,14 @@ void main() {
   vec4 nd = nrm(q + ivec2(0, -o)), nu = nrm(q + ivec2(0, o));
   float nEdge = (1.0 - dot(nc.xyz, nl.xyz)) + (1.0 - dot(nc.xyz, nr.xyz))
               + (1.0 - dot(nc.xyz, nd.xyz)) + (1.0 - dot(nc.xyz, nu.xyz));
-  float crease = nc.w < 0.1 ? ${DISCIPLE_CREASE.toFixed(2)} : 1.0;
-  // 門徒袍子的小級差不描邊（提高深度門檻），只留真正的剪影
-  float dK = nc.w < 0.1 ? 0.35 : 1.0;
+  bool discPx = nc.w < 0.06;
+  float crease = discPx ? ${DISCIPLE_CREASE.toFixed(2)} : 1.0;
+  // 門徒是平滑布料：只留淡淡的剪影線（布褶本身的深度起伏不描邊）
+  float dK = discPx ? 0.5 : 1.0;
   float edge = clamp(max(smoothstep(0.02, 0.12, dEdge * dK * ${OUTLINE_DEPTH_K.toFixed(1)} * 0.01),
                          crease * ${CREASE_STRENGTH.toFixed(2)} * smoothstep(0.15, 0.6, nEdge * ${OUTLINE_NORMAL_K.toFixed(2)} * 0.5)), 0.0, 1.0);
-  if (abs(nc.w - 0.25) < 0.1) edge *= ${DECOR_LINE.toFixed(2)};
+  if (abs(nc.w - 0.25) < 0.06) edge *= ${DECOR_LINE.toFixed(2)};
+  if (discPx) edge *= ${DISCIPLE_LINE.toFixed(2)};
   // 地面刻紋自身不描邊；遠處淡出
   float floorMask = (abs(nc.w - 0.5) < 0.1) ? 0.0 : 1.0;
   edge *= mix(1.0, floorMask, 1.0 - step(0.5, dEdge * 10.0));
@@ -397,21 +509,25 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     freeTargets();
   };
 
-  let scene, post;
+  const scenes = [];
+  let post;
   try {
-    scene = link(gl, SCENE_VS, SCENE_FS, 'scene'); res.programs.push(scene);
+    for (const pass of [PASS_DECOR, PASS_DISCIPLE, PASS_CROSS]) {
+      const p = link(gl, withPass(SCENE_VS, pass), withPass(SCENE_FS, pass), 'scene');
+      res.programs.push(p); scenes.push(p);
+    }
     post = link(gl, POST_VS, POST_FS, 'post'); res.programs.push(post);
   } catch (e) { freeAll(); throw e; }
-  const su = uniforms(gl, scene, ['uViewProj', 'uRing', 'uKind', 'uPose', 'uShoulder', 'uHip', 'uCut', 'uCutParams',
-    'uColor', 'uHoodColor', 'uBaseColor', 'uLightPos', 'uLightColor', 'uLightStrength', 'uGlow',
-    'uAmbSky', 'uAmbGround', 'uHeaven', 'uEmissive', 'uFloorColor', 'uFloorRing', 'uDiscipleR']);
+  const sus = scenes.map(p => uniforms(gl, p, ['uViewProj', 'uRing', 'uPose', 'uNeck', 'uHip', 'uCut', 'uCutParams',
+    'uColor', 'uTints', 'uBaseColor', 'uEye', 'uDiscRing', 'uDiscRingN', 'uLightPos', 'uLightColor', 'uLightStrength', 'uGlow',
+    'uAmbSky', 'uAmbGround', 'uHeaven', 'uEmissive', 'uFloorColor', 'uFloorRing', 'uDiscipleR']));
   const pu = uniforms(gl, post, ['uColorTex', 'uNormalTex', 'uDepthTex', 'uRes', 'uDpr', 'uProjY', 'uTime',
     'uGlow', 'uPulse', 'uCrossV', 'uCrossH', 'uCrossZ', 'uShaft']);
 
   // ── 幾何：每圈一個 VAO（模組幾何 + 每實例 [slot, rnd]） ──
   const plan = planRings({ seed, decorCount: DECOR_COUNT });
   const rng = mulberry32((seed * 7919 + 13) >>> 0);
-  const makeVao = ({ positions, normals, parts, instances }) => {
+  const makeVao = ({ positions, normals, parts, positions2, normals2, aux, instances }) => {
     const vao = gl.createVertexArray(); res.vaos.push(vao);
     gl.bindVertexArray(vao);
     const attr = (data, loc, size, divisor) => {
@@ -423,6 +539,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
       gl.vertexAttribDivisor(loc, divisor);
     };
     attr(positions, 0, 3, 0); attr(normals, 1, 3, 0); attr(parts, 2, 1, 0); attr(instances, 3, 2, 1);
+    attr(positions2, 4, 3, 0); attr(normals2, 5, 3, 0); attr(aux, 6, 4, 0);
     gl.bindVertexArray(null);
     return { vao, count: positions.length / 3, instances: instances.length / 2 };
   };
@@ -430,8 +547,9 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     const geo = makeVao(buildRingGeometry(ring, rng));
     return {
       ...geo, kind: ring.role === 'disciple' ? KIND_DISCIPLE : KIND_DECOR,
+      pass: ring.role === 'disciple' ? PASS_DISCIPLE : PASS_DECOR,
       R: ring.R, y: ring.y, N: ring.N, spinSpeed: ring.spinSpeed, dir: ring.dir,
-      spin: ring.phase, color: ring.role === 'disciple' ? ROBE_COLOR : ring.color.map(c => c * DECOR_DIM),
+      spin: ring.phase, color: ring.role === 'disciple' ? ROBE_TINTS[0] : ring.color.map(c => c * DECOR_DIM),
     };
   });
   // 十字架 + 地面（同一次 draw）
@@ -444,9 +562,15 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     positions: cat(crossArr.positions, floorArr.positions),
     normals: cat(crossArr.normals, floorArr.normals),
     parts: cat(crossArr.parts, floorArr.parts),
+    positions2: cat(crossArr.positions2, floorArr.positions2),
+    normals2: cat(crossArr.normals2, floorArr.normals2),
+    aux: cat(crossArr.aux, floorArr.aux),
     instances: new Float32Array([0, 0.5]),
   });
   const discipleR = plan.rings.filter(r => r.role === 'disciple').map(r => r.R);
+  const discRings = rings.filter(r => r.kind === KIND_DISCIPLE);
+  const discRingBuf = new Float32Array(9); // 每幀重填（不配置）
+  const tints = new Float32Array(ROBE_TINTS.flat());
   const emptyVao = gl.createVertexArray(); res.vaos.push(emptyVao);
 
   // ── FBO ──
@@ -589,41 +713,54 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     gl.clearBufferfv(gl.COLOR, 0, CLEAR_COLOR);
     gl.clearBufferfv(gl.COLOR, 1, CLEAR_NORMAL);
     gl.clearBufferfv(gl.DEPTH, 0, CLEAR_DEPTH);
-    gl.useProgram(scene);
-    gl.uniformMatrix4fv(su.uViewProj, false, viewProj);
-    gl.uniform4f(su.uPose, bowBlend, raiseBlend, time, breath);
-    gl.uniform3f(su.uShoulder, SHOULDER[0], SHOULDER[1], SHOULDER[2]);
-    gl.uniform3f(su.uHip, HIP[0], HIP[1], HIP[2]);
-    const ex = eye[0], ez = eye[2], el = Math.hypot(ex, ez) || 1;
-    gl.uniform2f(su.uCut, ex / el, ez / el);
-    gl.uniform3f(su.uCutParams, CUTAWAY_COS, CUTAWAY_SOFT, DECOR_SCALE_JITTER);
-    gl.uniform3f(su.uLightPos, LIGHT_POS[0], LIGHT_POS[1], LIGHT_POS[2]);
-    gl.uniform3f(su.uLightColor, LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
-    const g = glow + pulseAmt * PULSE_AMOUNT;
-    gl.uniform1f(su.uLightStrength, LIGHT_STRENGTH * g);
-    gl.uniform1f(su.uGlow, g);
-    gl.uniform3f(su.uAmbSky, AMBIENT_SKY[0], AMBIENT_SKY[1], AMBIENT_SKY[2]);
-    gl.uniform3f(su.uHeaven, HEAVEN_COLOR[0], HEAVEN_COLOR[1], HEAVEN_COLOR[2]);
-    gl.uniform3f(su.uAmbGround, AMBIENT_GROUND[0], AMBIENT_GROUND[1], AMBIENT_GROUND[2]);
-    gl.uniform3f(su.uEmissive, CROSS_EMISSIVE[0], CROSS_EMISSIVE[1], CROSS_EMISSIVE[2]);
-    gl.uniform3f(su.uHoodColor, HOOD_COLOR[0], HOOD_COLOR[1], HOOD_COLOR[2]);
-    gl.uniform3f(su.uBaseColor, BASE_COLOR[0], BASE_COLOR[1], BASE_COLOR[2]);
-    gl.uniform3f(su.uFloorColor, FLOOR_COLOR[0], FLOOR_COLOR[1], FLOOR_COLOR[2]);
-    gl.uniform3f(su.uFloorRing, FLOOR_RING_COLOR[0], FLOOR_RING_COLOR[1], FLOOR_RING_COLOR[2]);
-    gl.uniform3f(su.uDiscipleR, discipleR[0], discipleR[1], discipleR[2]);
-    for (let i = 0; i < rings.length; i++) {
-      const r = rings[i];
-      gl.uniform1f(su.uKind, r.kind);
-      gl.uniform4f(su.uRing, r.R, r.y, r.spin, r.N);
-      gl.uniform3f(su.uColor, r.color[0], r.color[1], r.color[2]);
-      gl.bindVertexArray(r.vao);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, r.count, r.instances);
+    const nr = Math.min(3, discRings.length);
+    for (let i = 0; i < nr; i++) {
+      const r = discRings[i];
+      discRingBuf[i * 3] = r.R; discRingBuf[i * 3 + 1] = r.spin % (Math.PI * 2); discRingBuf[i * 3 + 2] = r.N;
     }
-    gl.uniform1f(su.uKind, KIND_CROSS);
-    gl.uniform4f(su.uRing, 0, 0, crossYaw, 1);
-    gl.uniform3f(su.uColor, BASE_COLOR[0], BASE_COLOR[1], BASE_COLOR[2]);
-    gl.bindVertexArray(crossGeo.vao);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, crossGeo.count, 1);
+    const ex = eye[0], ez = eye[2], el = Math.hypot(ex, ez) || 1;
+    const g = glow + pulseAmt * PULSE_AMOUNT;
+    for (let pass = 0; pass < 3; pass++) {
+      const su = sus[pass];
+      gl.useProgram(scenes[pass]);
+      gl.uniformMatrix4fv(su.uViewProj, false, viewProj);
+      gl.uniform4f(su.uPose, bowBlend, raiseBlend, time, breath);
+      gl.uniform3f(su.uNeck, NECK[0], NECK[1], NECK[2]);
+      gl.uniform3f(su.uHip, HIP[0], HIP[1], HIP[2]);
+      gl.uniform3f(su.uEye, eye[0], eye[1], eye[2]);
+      gl.uniform3fv(su.uTints, tints);
+      gl.uniform3fv(su.uDiscRing, discRingBuf);
+      gl.uniform1i(su.uDiscRingN, nr);
+      gl.uniform2f(su.uCut, ex / el, ez / el);
+      gl.uniform3f(su.uCutParams, CUTAWAY_COS, CUTAWAY_SOFT, DECOR_SCALE_JITTER);
+      gl.uniform3f(su.uLightPos, LIGHT_POS[0], LIGHT_POS[1], LIGHT_POS[2]);
+      gl.uniform3f(su.uLightColor, LIGHT_COLOR[0], LIGHT_COLOR[1], LIGHT_COLOR[2]);
+      gl.uniform1f(su.uLightStrength, LIGHT_STRENGTH * g);
+      gl.uniform1f(su.uGlow, g);
+      gl.uniform3f(su.uAmbSky, AMBIENT_SKY[0], AMBIENT_SKY[1], AMBIENT_SKY[2]);
+      gl.uniform3f(su.uHeaven, HEAVEN_COLOR[0], HEAVEN_COLOR[1], HEAVEN_COLOR[2]);
+      gl.uniform3f(su.uAmbGround, AMBIENT_GROUND[0], AMBIENT_GROUND[1], AMBIENT_GROUND[2]);
+      gl.uniform3f(su.uEmissive, CROSS_EMISSIVE[0], CROSS_EMISSIVE[1], CROSS_EMISSIVE[2]);
+      gl.uniform3f(su.uBaseColor, BASE_COLOR[0], BASE_COLOR[1], BASE_COLOR[2]);
+      gl.uniform3f(su.uFloorColor, FLOOR_COLOR[0], FLOOR_COLOR[1], FLOOR_COLOR[2]);
+      gl.uniform3f(su.uFloorRing, FLOOR_RING_COLOR[0], FLOOR_RING_COLOR[1], FLOOR_RING_COLOR[2]);
+      gl.uniform3f(su.uDiscipleR, discipleR[0], discipleR[1], discipleR[2]);
+      if (pass === PASS_CROSS) {
+        gl.uniform4f(su.uRing, 0, 0, crossYaw, 1);
+        gl.uniform3f(su.uColor, BASE_COLOR[0], BASE_COLOR[1], BASE_COLOR[2]);
+        gl.bindVertexArray(crossGeo.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, crossGeo.count, 1);
+        continue;
+      }
+      for (let i = 0; i < rings.length; i++) {
+        const r = rings[i];
+        if (r.pass !== pass) continue;
+        gl.uniform4f(su.uRing, r.R, r.y, r.spin, r.N);
+        gl.uniform3f(su.uColor, r.color[0], r.color[1], r.color[2]);
+        gl.bindVertexArray(r.vao);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, r.count, r.instances);
+      }
+    }
 
     // 後製 pass
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);

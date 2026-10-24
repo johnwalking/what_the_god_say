@@ -64,3 +64,20 @@ test('FBO 不完整 → onFail、回傳 null', () => {
   assert.equal(createMandala(canvasWith(gl), { onFail: r => reasons.push(r) }), null);
   assert.match(reasons[0], /framebuffer incomplete/);
 });
+
+test('場景 shader 依 PASS 編成三支程式（裝飾環／門徒／十字架與地面），加上後製共四支', () => {
+  const sources = [];
+  let programs = 0;
+  const gl = fakeGl({
+    shaderSource: (_, src) => { sources.push(src); },
+    createProgram: () => { programs++; return {}; },
+  });
+  // Node 沒有 requestAnimationFrame，建立會在 shader 都連結完之後才以 onFail 結束
+  const reasons = [];
+  assert.equal(createMandala(canvasWith(gl), { onFail: r => reasons.push(r) }), null);
+  assert.match(reasons[0], /requestAnimationFrame/);
+  assert.equal(programs, 4);
+  for (const p of [0, 1, 2]) assert.equal(sources.filter(s => s.includes(`#define PASS ${p}\n`)).length, 2, `PASS ${p}`);
+  // 每支 shader 的 #version 必須在第一行
+  assert.ok(sources.every(s => s.startsWith('#version 300 es\n')));
+});
