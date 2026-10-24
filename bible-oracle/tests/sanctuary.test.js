@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, roseWindowSVG } from '../assets/sanctuary.js';
+import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, roseWindowSVG, createSanctuary } from '../assets/sanctuary.js';
 
 test('splitGraphemes 依碼點拆分且容忍空值', () => {
   assert.deepEqual(splitGraphemes('主的旨意'), ['主', '的', '旨', '意']);
@@ -55,4 +55,59 @@ test('revealSchedule maxTotal 過小時延遲仍嚴格遞增且有限', () => {
     assert.ok(Number.isFinite(delays[i]));
     if (i > 0) assert.ok(delays[i] > delays[i - 1]);
   }
+});
+
+// ---- openGate：onOpen 與焦點（以最小的 DOM 替身驗證）----
+function fakeEl(id, extra = {}) {
+  const attrs = new Map();
+  const classes = new Set();
+  return {
+    id, hidden: false, textContent: '', focused: false, ...extra,
+    classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
+    setAttribute: (k, v) => attrs.set(k, v),
+    removeAttribute(k) { attrs.delete(k); },
+    hasAttribute: (k) => attrs.has(k),
+    focus() { this.focused = true; },
+  };
+}
+function fakeRoot() {
+  const els = Object.fromEntries(['gate', 'mute', 'question', 'notice'].map((i) => [i, fakeEl(i)]));
+  const main = fakeEl('main');
+  const body = fakeEl('body');
+  const root = {
+    nodeType: 9, body, defaultView: globalThis,
+    getElementById: (id) => els[id] ?? null,
+    querySelector: (sel) => (sel === 'main.page' ? main : null),
+    querySelectorAll: () => [],
+  };
+  return { root, els, main };
+}
+
+test('openGate：onOpen 在 inert 移除之後呼叫，可見的關懷訊息取得焦點', async () => {
+  const { root, els, main } = fakeRoot();
+  const s = createSanctuary({ root, reducedMotion: true });
+  assert.ok(main.hasAttribute('inert'));
+  let inertAtCall = null;
+  els.notice.hidden = true;
+  s.openGate(() => {
+    inertAtCall = main.hasAttribute('inert');
+    els.notice.textContent = '關懷';
+    els.notice.hidden = false;
+  });
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(inertAtCall, false);
+  assert.equal(els.notice.focused, true);
+  assert.equal(els.question.focused, false);
+  assert.equal(els.notice.textContent, '關懷');
+});
+
+test('openGate：沒有可見訊息或訊息在忙時焦點給輸入框', async () => {
+  const { root, els } = fakeRoot();
+  const s = createSanctuary({ root, reducedMotion: true });
+  els.notice.hidden = false;
+  els.notice.classList.add('busy');
+  s.openGate();
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(els.question.focused, true);
+  assert.equal(els.notice.focused, false);
 });

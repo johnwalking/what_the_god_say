@@ -193,7 +193,7 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     } catch { /* 焦點失敗不影響流程 */ }
   }
 
-  function openGate() {
+  function openGate(onOpen) {
     const gate = $('gate');
     const main = mainEl();
     doc?.body?.classList.add('entered');
@@ -203,8 +203,18 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
       if (gate) gate.hidden = true;
       main?.removeAttribute('inert');
       $('mute')?.removeAttribute('hidden');
+      // 入口開啟後才執行待辦（例如分享連結的提問），此時 main 已不是 inert，訊息才讀得到
+      try { onOpen?.(); } catch (error) { console.warn('入口開啟後的待辦出錯：', error); }
+      const notice = $('notice');
+      const noticeShown = Boolean(notice) && !notice.hidden && !notice.classList.contains('busy') && Boolean(notice.textContent);
+      if (noticeShown) {
+        // 重設文字，讓 live region 在 inert 解除後重新播報
+        const text = notice.textContent;
+        notice.textContent = '';
+        notice.textContent = text;
+      }
       try {
-        $('question')?.focus?.({ preventScroll: true });
+        (noticeShown ? notice : $('question'))?.focus?.({ preventScroll: true });
       } catch { /* 焦點失敗不影響流程 */ }
     };
     if (!gate) { finish(); return; }

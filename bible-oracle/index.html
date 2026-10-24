@@ -31,7 +31,7 @@
     <button type="submit">求 問</button>
   </form>
 
-  <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+  <p id="notice" class="notice" role="status" tabindex="-1" aria-live="polite" hidden></p>
 
   <section id="answer" class="answer" hidden>
     <p class="asked">你問：<span id="asked-text"></span></p>
@@ -61,5 +61,15 @@
   </div>
 </div>
 <script type="module" src="assets/app.js"></script>
+<script>
+// 後備：app.js 載入失敗（模組錯誤、舊瀏覽器、CSP、404）時，入口不能永遠擋住頁面
+setTimeout(function () {
+  if (window.__sanctuaryReady) return;
+  var gate = document.getElementById('gate');
+  if (gate) gate.hidden = true;
+  var main = document.querySelector('main.page');
+  if (main) main.removeAttribute('inert');
+}, 4000);
+</script>
 </body>
 </html>

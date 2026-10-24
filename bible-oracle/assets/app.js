@@ -193,8 +193,7 @@ async function ask(question, n) {
     showCare(CARE_MESSAGE);
     return;
   }
-  audio.hush(false);
-  sanctuary.pulse();
+  // 此時還不知道後端會不會判定為危機，儀式（閃光、配樂回升）等結果出來再開始
   sanctuary.setBusy(true);
   showNotice('求問中⋯');
 
@@ -225,6 +224,8 @@ async function ask(question, n) {
     目前的答案 = result;
     writeURL(question, n);
     sanctuary.setBusy(false);
+    audio.hush(false);
+    sanctuary.pulse();
     render(result, question);
   } catch (error) {
     console.warn('顯示答案時出錯：', error);
@@ -284,23 +285,22 @@ function syncMute() {
 /** 帶 ?q= 的分享連結：入口開了才作答。 */
 let 待答 = null;
 let 已入場 = false;
-let 音樂已啟動 = false;
 
 function enter() {
   if (已入場) return;
   已入場 = true;
-  sanctuary.openGate();
-  syncMute();
-  if (待答) {
+  // 待答的提問要等 main 解除 inert 後才送，live region 與焦點才會正確
+  sanctuary.openGate(() => {
+    if (!待答) return;
     const { question, n } = 待答;
     待答 = null;
     ask(question, n);
-  }
+  });
+  syncMute();
 }
 
 el.enterSound.addEventListener('click', () => {
   audio.start(); // 必須在使用者手勢內同步呼叫，否則瀏覽器不放行
-  音樂已啟動 = true;
   enter();
 });
 
@@ -315,13 +315,12 @@ el.mute.addEventListener('click', () => {
   const muted = !audio.isMuted();
   audio.setMuted(muted);
   // 靜默進入後第一次取消靜音：這是使用者手勢，此時才啟動音樂
-  if (!muted && !音樂已啟動) {
-    audio.start();
-    音樂已啟動 = true;
-  }
+  // start() 冪等且會恢復被暫停的 context，失敗後也能重試
+  if (!muted) audio.start();
   syncMute();
 });
 
+window.__sanctuaryReady = true; // index.html 的後備腳本據此判斷 app.js 有沒有跑起來
 sanctuary.mountWindow();
 sanctuary.startDust();
 sanctuary.focusGate();
