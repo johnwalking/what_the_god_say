@@ -7,15 +7,18 @@ import os
 import subprocess
 import sys
 import time
-from typing import List
+from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from eval.metrics import summarize, to_markdown  # noqa: E402
 from eval.pools import HERE, load_dataset, load_topics, topic_pools  # noqa: E402
+from server.main import RERANK_CONFIG_NAME  # noqa: E402
 from server.safety import is_crisis  # noqa: E402
 
 RESULTS_PATH = os.path.join(HERE, 'results.json')
+B2_LABEL = f'B2 {RERANK_CONFIG_NAME}'
+STALE_LABELS = ('B2 bge-m3 + rerank',)
 EVALUABLE = ('topic', 'none')
 
 
@@ -67,6 +70,16 @@ def safety_report(dataset: List[dict]) -> dict:
     }
 
 
+def merge_results(old: Optional[dict], summaries: Dict[str, dict], rows: Dict[str, list]) -> Tuple[dict, dict]:
+    """保留舊檔中本次未執行方法的結果；已被取代的舊標籤丟棄。"""
+    old = old or {}
+    kept_s = {k: v for k, v in old.get('summary', {}).items() if k not in STALE_LABELS}
+    kept_r = {k: v for k, v in old.get('rows', {}).items() if k not in STALE_LABELS}
+    kept_s.update(summaries)
+    kept_r.update(rows)
+    return kept_s, kept_r
+
+
 def main(argv: List[str]) -> None:
     methods = argv[1:] or ['b0', 'b1']
     dataset = load_dataset()
@@ -91,10 +104,15 @@ def main(argv: List[str]) -> None:
     if 'b2' in methods:
         from server.cache import Cache
         from server.main import build_default_pipeline
-        rows_by_method['B2 bge-m3 + rerank'] = run_b2(dataset, build_default_pipeline(cache=Cache()))
+        rows_by_method[B2_LABEL] = run_b2(dataset, build_default_pipeline(cache=Cache()))
 
     summaries = {name: summarize(rows, pools) for name, rows in rows_by_method.items()}
     report = safety_report(dataset)
+    old = None
+    if os.path.exists(RESULTS_PATH):
+        with open(RESULTS_PATH, encoding='utf-8') as handle:
+            old = json.load(handle)
+    summaries, rows_by_method = merge_results(old, summaries, rows_by_method)
     with open(RESULTS_PATH, 'w', encoding='utf-8') as handle:
         json.dump({'summary': summaries, 'safety': report, 'rows': rows_by_method}, handle, ensure_ascii=False, indent=1)
     print(to_markdown(summaries))

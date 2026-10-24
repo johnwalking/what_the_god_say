@@ -23,6 +23,8 @@ from server.pipeline import Pipeline
 
 log = logging.getLogger('oracle')
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+# 採用的 rerank 設定（eval/rerank_results.json：hit@1 最高且退回率 <=10%）。
+RERANK_CONFIG_NAME = 'D 僅精選庫20 + P1 選號 + 洗牌'
 CONTROL_CHARS = re.compile(r'[\u0000-\u001f\u007f]')
 
 
@@ -79,18 +81,22 @@ def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
     from server.embedder import BgeM3Embedder
     from server.llm import OllamaLLM
     from server.quip import load_examples
+    from server.rerank import CONFIGS
     from server.retrieve import HybridRetriever, curated_ids_from_topics, load_index
 
     with open(os.path.join(ROOT, 'data', 'topics.json'), encoding='utf-8') as handle:
         topics_file = json.load(handle)
     corpus = load_corpus()
+    config = CONFIGS[RERANK_CONFIG_NAME]
     retriever = HybridRetriever(
-        corpus, load_index(), BgeM3Embedder(), curated_ids_from_topics(topics_file)
+        corpus, load_index(), BgeM3Embedder(), curated_ids_from_topics(topics_file),
+        k_curated=config['k_curated'],
     )
     return Pipeline(
         corpus, retriever, OllamaLLM(),
         examples=load_examples(topics_file), wrappers=topics_file['wrappers'],
         cache=cache or Cache(os.path.join(ROOT, 'data', 'cache.sqlite')),
+        rerank_fn=config['fn'],
     )
 
 

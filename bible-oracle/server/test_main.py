@@ -127,3 +127,10 @@ def test_rate_limiter_drops_empty_keys():
     time.sleep(0.03)
     assert limiter.allow('b')
     assert 'a' not in limiter._hits
+
+
+def test_rerank_config_name_exists_in_configs():
+    import server.main as main
+    from server.rerank import CONFIGS
+    assert main.RERANK_CONFIG_NAME in CONFIGS
+    assert {'k_curated', 'fn'} <= set(CONFIGS[main.RERANK_CONFIG_NAME])

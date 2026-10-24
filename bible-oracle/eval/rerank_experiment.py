@@ -6,7 +6,6 @@ import json
 import os
 import sys
 import time
-from functools import partial
 from typing import Callable, Dict, List
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -14,18 +13,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from eval.metrics import hit_at_k, percentile  # noqa: E402
 from eval.pools import HERE, load_dataset, load_topics, topic_pools  # noqa: E402
 from server.llm import LLMError  # noqa: E402
-from server.rerank import RerankError, rerank, rerank_scores  # noqa: E402
+from server.rerank import CONFIGS, RerankError  # noqa: E402,F401
 
 RESULTS_PATH = os.path.join(HERE, 'rerank_results.json')
-
-# name -> (k_curated, rerank_fn)。k_curated=20 代表候選全部來自精選庫。
-CONFIGS: Dict[str, dict] = {
-    'A hybrid10 + P0 選號': {'k_curated': 10, 'fn': partial(rerank, prompt='P0')},
-    'B hybrid10 + P1 選號 + 洗牌': {'k_curated': 10, 'fn': partial(rerank, prompt='P1', shuffle=True)},
-    'C hybrid10 + listwise 評分': {'k_curated': 10, 'fn': rerank_scores},
-    'D 僅精選庫20 + P1 選號 + 洗牌': {'k_curated': 20, 'fn': partial(rerank, prompt='P1', shuffle=True)},
-    'E 僅精選庫20 + listwise 評分': {'k_curated': 20, 'fn': rerank_scores},
-}
 
 
 def run_config(name: str, retriever, rerank_fn: Callable, llm, dataset: List[dict], pools: Dict[str, set]) -> dict:

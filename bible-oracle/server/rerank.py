@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import random
-from typing import List
+from functools import partial
+from typing import Dict, List
 
 from server.retrieve import Hit
 from server.textutil import fnv1a, normalize
@@ -80,3 +81,13 @@ def rerank_scores(llm, question: str, hits: List[Hit]) -> int:
     if not valid:
         raise RerankError(f'分數格式不合法：{scores!r}')
     return max(range(len(hits)), key=lambda i: (scores[i], -i))
+
+
+# name -> (k_curated, rerank_fn)。k_curated=20 代表候選全部來自精選庫。server 與 eval 共用。
+CONFIGS: Dict[str, dict] = {
+    'A hybrid10 + P0 選號': {'k_curated': 10, 'fn': partial(rerank, prompt='P0')},
+    'B hybrid10 + P1 選號 + 洗牌': {'k_curated': 10, 'fn': partial(rerank, prompt='P1', shuffle=True)},
+    'C hybrid10 + listwise 評分': {'k_curated': 10, 'fn': rerank_scores},
+    'D 僅精選庫20 + P1 選號 + 洗牌': {'k_curated': 20, 'fn': partial(rerank, prompt='P1', shuffle=True)},
+    'E 僅精選庫20 + listwise 評分': {'k_curated': 20, 'fn': rerank_scores},
+}
