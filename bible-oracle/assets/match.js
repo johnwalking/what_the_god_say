@@ -56,6 +56,70 @@ export function normalize(input) {
     .toLowerCase();
 }
 
+/**
+ * 安全閘：自傷相關輸入不走諷刺流程。
+ * 這份清單與 server/safety.py 的 _PATTERNS 逐字相同（server/test_safety_parity.py 會比對），
+ * 改一邊必須同步改另一邊。比對對象是 normalize 之後的文字。
+ */
+export const CARE_MESSAGE =
+  '聽起來你現在很辛苦。這個網站只是在開玩笑，請不要把它當成答案。如果你有傷害自己的念頭，請現在撥打 1925（24 小時安心專線）或 1995（生命線）；若有立即的危險，請撥 119。你不需要一個人撐著。';
+
+const 危機樣式 = [
+  '想死(?!你)',
+  '不想(再)?活',
+  '自殺',
+  '輕生',
+  '尋死',
+  '去死',
+  '結束.{0,3}生命',
+  '結束自己',
+  '了結自己',
+  '活不下去',
+  '不想存在',
+  '想消失',
+  '割腕',
+  '跳樓',
+  '上吊',
+  '燒炭',
+  '吞藥',
+  '死了算了',
+  '死掉算了',
+  '活著沒意思',
+  '活著好累',
+  '自我了[結斷结断]',
+  '了[結斷结断]自己',
+  '活不了了',
+  '想不開',
+  '(吃|吞|服|嗑|灌).{0,4}安眠藥',
+  '傷害自己',
+  '割自己',
+  '(想|要|從|爬上).{0,6}跳下去(?!游泳)',
+  '不如死',
+  '活著沒(有)?意義',
+  '自杀',
+  '轻生',
+  '寻死',
+  '跳楼',
+  '烧炭',
+  '吞药',
+  '结束.{0,3}生命',
+  '结束自己',
+  '了结自己',
+  '想不开',
+  '(吃|吞|服|嗑|灌).{0,4}安眠药',
+  '伤害自己',
+  '活着没(有)?意[义思]',
+  '活着好累',
+  'kill(ing)?myself',
+  'suicid',
+  'kms',
+];
+const 危機正規式 = new RegExp(危機樣式.join('|'));
+
+export function isCrisis(text) {
+  return 危機正規式.test(normalize(text));
+}
+
 /** FNV-1a 32-bit。用來把問題字串轉成穩定的亂數種子，確保分享出去的連結重現同一張卡。 */
 export function hashFNV1a(str) {
   let hash = 0x811c9dc5;
@@ -114,6 +178,20 @@ export function pickTopic(normalized, topics, index = null) {
  * @param {number} n 「再求一次」的位移，同時也是網址上的 n 參數
  */
 export function answer(question, data, n = 0) {
+  // 任何呼叫端（含 API 失敗時的靜態退路）都不能繞過安全閘
+  if (isCrisis(question)) {
+    return {
+      kind: 'crisis',
+      topicId: null,
+      tier: null,
+      ref: '',
+      verseId: '',
+      text: CARE_MESSAGE,
+      quip: '',
+      index: 0,
+      poolSize: 0,
+    };
+  }
   const normalized = normalize(question);
   const seed = hashFNV1a(normalized);
   // n 來自網址參數，使用者可竄改；非負整數以外一律當作 0

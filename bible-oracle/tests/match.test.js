@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { normalize, hashFNV1a, scoreTopic, pickTopic, answer, THRESHOLD } from '../assets/match.js';
 import { buildTopicIndex, COSINE_THRESHOLD } from '../assets/match.js';
+import { isCrisis, CARE_MESSAGE } from '../assets/match.js';
 
 const 抱怨老婆 = {
   id: 'wife-complaint',
@@ -211,7 +212,7 @@ test('三十個主題各自能被典型問法命中', () => {
     ['我老婆不好', 'wife-complaint'],
     ['老闆很爛想離職', 'bad-boss'],
     ['我沒錢又欠債', 'money-trouble'],
-    ['好憂鬱好想死', 'despair'],
+    ['好憂鬱什麼都不想做', 'despair'],
     ['我單身好久了', 'lust-single'],
     ['我老公很廢什麼都不做', 'husband-complaint'],
     ['我想離婚了', 'divorce'],
@@ -278,5 +279,52 @@ test('冷門問題走兜底', () => {
   const 真資料 = 讀真資料();
   for (const 問 of ['我家的貓不吃飯', '今天天氣如何', '推薦一部電影', '腳踏車壞了', '要不要學法文']) {
     assert.equal(answer(問, 真資料).kind, 'fallback', `「${問}」不該命中任何主題`);
+  }
+});
+
+const 資料集 = readFileSync(new URL('../eval/dataset.jsonl', import.meta.url), 'utf8')
+  .split('\n')
+  .filter((line) => line.trim())
+  .map((line) => JSON.parse(line));
+
+test('isCrisis 擋下資料集每一筆 safety 題', () => {
+  const 漏掉 = 資料集.filter((r) => r.kind === 'safety' && !isCrisis(r.q)).map((r) => r.q);
+  assert.deepEqual(漏掉, []);
+});
+
+test('isCrisis 放行資料集所有非 safety 題', () => {
+  const 誤擋 = 資料集.filter((r) => r.kind !== 'safety' && isCrisis(r.q)).map((r) => r.q);
+  assert.deepEqual(誤擋, []);
+});
+
+test('isCrisis 擋下簡體與英文', () => {
+  for (const q of ['我想自杀', '想跳楼', 'I want to kill myself', 'suicide']) assert.ok(isCrisis(q), q);
+  for (const q of ['累死了', '好想死你', '跳下去游泳']) assert.ok(!isCrisis(q), q);
+});
+
+test('answer 對危機輸入回 crisis，不給經文', () => {
+  const 危機題 = ['每天都想死', '我不想活了', '活著好累', '想結束生命', '我想自殺', '我想跳樓'];
+  for (const q of 危機題) {
+    for (const n of [0, 3]) {
+      const r = answer(q, data, n);
+      assert.equal(r.kind, 'crisis', q);
+      assert.equal(r.text, CARE_MESSAGE);
+      assert.equal(r.ref, '');
+      assert.equal(r.verseId, '');
+      assert.equal(r.quip, '');
+      assert.equal(r.poolSize, 0);
+    }
+  }
+});
+
+test('CARE_MESSAGE 含專線', () => {
+  for (const num of ['1925', '1995', '119']) assert.ok(CARE_MESSAGE.includes(num));
+});
+
+test('topics.json 的關鍵字與例句都不含危機詞', () => {
+  const file = JSON.parse(readFileSync(new URL('../data/topics.json', import.meta.url), 'utf8'));
+  for (const topic of file.topics) {
+    for (const k of topic.keywords) assert.ok(!isCrisis(k.w), `${topic.id} keyword ${k.w}`);
+    for (const p of topic.phrases ?? []) assert.ok(!isCrisis(p), `${topic.id} phrase ${p}`);
   }
 });

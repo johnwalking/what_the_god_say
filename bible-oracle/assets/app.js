@@ -2,7 +2,7 @@
  * 接線層：載資料、綁事件、渲染。
  * 這裡不放任何業務邏輯 —— 比對規則全在 match.js。
  */
-import { answer, buildTopicIndex } from './match.js';
+import { answer, buildTopicIndex, isCrisis, CARE_MESSAGE } from './match.js';
 import { downloadCard } from './card.js';
 
 /** topics.json 或 fallback.json 掛掉時的緊急經文池，確保網站永遠答得出來。 */
@@ -52,6 +52,10 @@ let data = null;
 let 目前的問題 = '';
 let 目前的位移 = 0;
 let 目前的答案 = null;
+let 目前的池大小 = 0;
+
+/** 伺服器接受的 n 上限（server/main.py）。 */
+const API_N_MAX = 1000;
 
 const API_TIMEOUT_MS = 8000;
 let 請求序號 = 0;
@@ -102,6 +106,12 @@ function showNotice(message) {
 }
 
 function render(result, question) {
+  // 縱深防禦：危機結果永遠不能被當成經文顯示
+  if (result.kind === 'crisis') {
+    目前的答案 = null;
+    showNotice(CARE_MESSAGE);
+    return;
+  }
   el.notice.hidden = true;
   el.asked.textContent = question.length > 100 ? `${question.slice(0, 100)}⋯` : question;
   el.verse.textContent = result.text;
@@ -131,14 +141,27 @@ function writeURL(question, n) {
 
 async function ask(question, n) {
   const 序號 = ++請求序號;
+  if (question !== 目前的問題) 目前的池大小 = 0;
   目前的問題 = question;
   目前的位移 = n;
+
+  // 安全閘放在任何網路請求之前：API 失敗、逾時、被限流時也一樣會擋下
+  if (isCrisis(question)) {
+    目前的答案 = null;
+    writeURL(question, n);
+    showNotice(CARE_MESSAGE);
+    return;
+  }
   showNotice('求問中⋯');
 
   try {
     let result;
     try {
-      const body = await fetchOracle(question, n);
+      // 伺服器端是 order[n % 池大小]，所以已知池大小時先取模，結果完全相同，
+      // 又不會讓無限點「再求一次」超過伺服器的 n 上限（1000）而被 422 拒絕；
+      // 池大小未知（例如直接開帶 n 的連結）就只能封頂在 1000。
+      const apiN = 目前的池大小 > 0 ? n % 目前的池大小 : Math.min(n, API_N_MAX);
+      const body = await fetchOracle(question, apiN);
       if (序號 !== 請求序號) return;
       if (body.kind === 'crisis') {
         目前的答案 = null;
@@ -147,10 +170,12 @@ async function ask(question, n) {
         return;
       }
       result = { ref: body.ref, text: body.text, quip: body.quip, poolSize: body.pool_size };
+      目前的池大小 = body.pool_size;
     } catch (error) {
       console.warn('API 無法使用，改用靜態比對：', error);
       if (序號 !== 請求序號) return;
       result = answer(question, data, n);
+      目前的池大小 = result.poolSize;
     }
 
     目前的答案 = result;
