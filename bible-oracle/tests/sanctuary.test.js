@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, worshipState, discipleRings, projectDisciple, clampPitch, clampZoom, sceneSpeed, createSanctuary } from '../assets/sanctuary.js';
+import { splitGraphemes, revealSchedule, quipDelay, charJitter, ceremonyFor, worshipState, discipleRings, projectDisciple, clampPitch, clampZoom, sceneSpeed, createSanctuary } from '../assets/sanctuary.js';
 
 test('splitGraphemes 依碼點拆分且容忍空值', () => {
   assert.deepEqual(splitGraphemes('主的旨意'), ['主', '的', '旨', '意']);
@@ -46,6 +46,113 @@ test('revealSchedule maxTotal 過小時延遲仍嚴格遞增且有限', () => {
   for (let i = 0; i < delays.length; i++) {
     assert.ok(Number.isFinite(delays[i]));
     if (i > 0) assert.ok(delays[i] > delays[i - 1]);
+  }
+});
+
+test('charJitter 確定性且落在 [0, 1)，相鄰值不同', () => {
+  const xs = Array.from({ length: 300 }, (_, i) => charJitter(i));
+  assert.deepEqual(xs, Array.from({ length: 300 }, (_, i) => charJitter(i)));
+  for (const x of xs) assert.ok(x >= 0 && x < 1, `x=${x}`);
+  assert.ok(new Set(xs.map((x) => x.toFixed(3))).size > 250);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  assert.ok(mean > 0.35 && mean < 0.65, `mean=${mean}`);
+});
+
+test('revealSchedule 的 fade 參數計入 total；jitter 讓延遲成波但不早於 startDelay', () => {
+  const plain = revealSchedule('一二三', { startDelay: 0.2, perChar: 0.1, maxTotal: 9, fade: 2 });
+  assert.deepEqual(plain.delays, [0.2, 0.3, 0.4]);
+  assert.equal(plain.total, 2.4);
+  const wave = revealSchedule('字'.repeat(60), { startDelay: 0.6, perChar: 0.11, maxTotal: 8, fade: 2, jitter: 0.45 });
+  assert.ok(wave.delays.every((d) => d >= 0.6));
+  assert.ok(wave.delays.some((d, i) => i > 0 && d < wave.delays[i - 1]), '應該有些字比前一個字早一點浮現');
+  assert.equal(wave.total, Math.round((Math.max(...wave.delays) + 2) * 1000) / 1000);
+  assert.ok(wave.total <= 8, `total=${wave.total}`);
+  assert.deepEqual(wave, revealSchedule('字'.repeat(60), { startDelay: 0.6, perChar: 0.11, maxTotal: 8, fade: 2, jitter: 0.45 }));
+});
+
+test('revealSchedule 長經文加 jitter 仍壓在 maxTotal 內', () => {
+  for (const n of [1, 10, 45, 120, 400]) {
+    const { total } = revealSchedule('字'.repeat(n), { startDelay: 0.6, perChar: 0.11, maxTotal: 8, fade: 2, jitter: 0.45 });
+    assert.ok(total <= 8, `n=${n} total=${total}`);
+  }
+});
+
+test('quipDelay 可指定停頓秒數', () => {
+  assert.equal(quipDelay(6, 2), 8);
+});
+
+// ---- reveal（最小 DOM 替身）----
+function fakeNode(tag = 'span') {
+  const classes = new Set();
+  const props = new Map();
+  const attrs = new Map();
+  const node = {
+    tagName: tag.toUpperCase(), children: [], className: '', offsetWidth: 0,
+    get textContent() { return node._text ?? node.children.map((c) => c.textContent).join(''); },
+    set textContent(v) { node._text = String(v); node.children = []; },
+    classList: { add: (...c) => c.forEach((x) => classes.add(x)), remove: (...c) => c.forEach((x) => classes.delete(x)), contains: (c) => classes.has(c), toggle() {} },
+    style: { setProperty: (k, v) => props.set(k, v), getPropertyValue: (k) => props.get(k) ?? '' },
+    setAttribute: (k, v) => attrs.set(k, v),
+    getAttribute: (k) => attrs.get(k) ?? null,
+    appendChild(child) {
+      node._text = undefined;
+      if (child.isFragment) node.children.push(...child.children); else node.children.push(child);
+      return child;
+    },
+  };
+  return node;
+}
+function revealRig(reducedMotion = false) {
+  const d = {
+    createDocumentFragment: () => Object.assign(fakeNode('#fragment'), { isFragment: true }),
+    createElement: (t) => fakeNode(t),
+  };
+  const verseEl = Object.assign(fakeNode('blockquote'), { ownerDocument: d });
+  const refEl = fakeNode('cite');
+  const quipEl = fakeNode('p');
+  const root = { nodeType: 9, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] };
+  const s = createSanctuary({ root, reducedMotion });
+  return { s, verseEl, refEl, quipEl };
+}
+
+test('reveal：逐字 span 帶延遲與時長、aria-hidden，並保留完整文字給螢幕閱讀器；出處與解讀依序延後', () => {
+  const { s, verseEl, refEl, quipEl } = revealRig();
+  const text = '你們作妻子的、當順服自己的丈夫、如同順服主．';
+  const { total } = s.reveal({ verseEl, refEl, quipEl, text, kind: 'oracle' });
+  const [full, ...chars] = verseEl.children;
+  assert.equal(full.className, 'visually-hidden');
+  assert.equal(full.textContent, text);
+  assert.equal(chars.length, [...text].length);
+  for (const c of chars) {
+    assert.equal(c.className, 'ch');
+    assert.equal(c.getAttribute('aria-hidden'), 'true');
+    const dur = parseFloat(c.style.getPropertyValue('--dur'));
+    assert.ok(dur >= 1.4 && dur <= 2.0, `dur=${dur}`);
+    assert.ok(parseFloat(c.style.getPropertyValue('--d')) + dur <= total + 1e-9);
+  }
+  assert.ok(total > 3 && total <= 8, `total=${total}`);
+  assert.ok(verseEl.classList.contains('inscribing'));
+  assert.equal(parseFloat(refEl.style.getPropertyValue('--d')), total);
+  assert.ok(parseFloat(quipEl.style.getPropertyValue('--d')) - total >= 1.9);
+  assert.ok(refEl.classList.contains('reveal-late') && quipEl.classList.contains('reveal-late'));
+});
+
+test('reveal 重來時清掉上一次的字，不留殘餘', () => {
+  const { s, verseEl, refEl, quipEl } = revealRig();
+  s.reveal({ verseEl, refEl, quipEl, text: '甲乙丙丁戊', kind: 'oracle' });
+  s.reveal({ verseEl, refEl, quipEl, text: '天地', kind: 'oracle' });
+  assert.equal(verseEl.children.length, 1 + 2);
+  assert.equal(verseEl.children[0].textContent, '天地');
+});
+
+test('reveal：危機訊息與 reducedMotion 都是純文字，沒有任何動畫 class', () => {
+  for (const [reduced, kind] of [[false, 'crisis'], [true, 'oracle']]) {
+    const { s, verseEl, refEl, quipEl } = revealRig(reduced);
+    s.reveal({ verseEl, refEl, quipEl, text: '甲乙丙', kind });
+    assert.equal(verseEl.children.length, 0);
+    assert.equal(verseEl.textContent, '甲乙丙');
+    assert.ok(!verseEl.classList.contains('inscribing'));
+    assert.ok(!refEl.classList.contains('reveal-late') && !quipEl.classList.contains('reveal-late'));
   }
 });
 

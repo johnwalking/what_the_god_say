@@ -42,22 +42,39 @@ export function splitGraphemes(text) {
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
 
+// ---- 經文浮現旋鈕（皆可調；glow 顏色與出處／解讀的淡入秒數在 style.css 的 :root）----
+const REVEAL_START = 0.6; // 第一個字開始浮現前的靜默（秒）
+const REVEAL_PER_CHAR = 0.11; // 相鄰字的基本間隔（秒）；長經文會自動壓縮
+const REVEAL_JITTER = 0.45; // 每字延遲的確定性抖動上限（秒），讓浮現像波而不是打字機
+const REVEAL_MAX_TOTAL = 8; // 整段經文浮現完成的上限（秒）
+const CH_RISE_MIN = 1.5; // 單字從金光中浮出的最短時長（秒）
+const CH_RISE_MAX = 2.0; // 單字浮出的最長時長（秒；也是排程的 fade）
+const QUIP_GAP = 2; // 經文完成後，「屬靈解讀」再等幾秒（喜劇停頓）
+
+/** 確定性的偽亂數（0 ≤ x < 1），只依整數 i；用來替每個字加一點不規則。 */
+export function charJitter(i) {
+  const x = Math.sin((Number(i) + 1) * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 /**
  * 經文逐字浮現的排程：每字一個延遲秒數。
- * 保證：total（最後一字延遲 + 0.6 淡入）不超過 maxTotal；但 maxTotal 小到容納不下時，
- * 間隔以 0.005 秒為下限（維持嚴格遞增），此時 total 會略超過 maxTotal。
+ * fade 為單字淡入秒數；jitter > 0 時每字延遲再加上 jitter × charJitter(i)（不再單調，形成波）。
+ * 保證：total（最大延遲 + fade）不超過 maxTotal；但 maxTotal 小到容納不下時，
+ * 間隔以 0.005 秒為下限（jitter = 0 時維持嚴格遞增），此時 total 會略超過 maxTotal。
  */
-export function revealSchedule(text, { startDelay = 0.2, perChar = 0.06, maxTotal = 4.5 } = {}) {
+export function revealSchedule(text, { startDelay = 0.2, perChar = 0.06, maxTotal = 4.5, fade = 0.6, jitter = 0 } = {}) {
   const chars = splitGraphemes(text);
   if (chars.length === 0) return { chars, delays: [], total: 0 };
-  const step = Math.max(0.005, Math.min(perChar, (maxTotal - startDelay - 0.6) / chars.length));
-  const delays = chars.map((_, i) => round3(startDelay + i * step));
-  return { chars, delays, total: round3(delays[delays.length - 1] + 0.6) };
+  const j = Math.max(0, jitter);
+  const step = Math.max(0.005, Math.min(perChar, (maxTotal - startDelay - fade - j) / chars.length));
+  const delays = chars.map((_, i) => round3(startDelay + i * step + (j ? j * charJitter(i) : 0)));
+  return { chars, delays, total: round3(Math.max(...delays) + fade) };
 }
 
 /** 「屬靈解讀」晚一點才出現，補刀才有喜劇節奏。 */
-export function quipDelay(total) {
-  return round3(total + 1.5);
+export function quipDelay(total, gap = 1.5) {
+  return round3(total + gap);
 }
 
 /** 危機訊息不能被包裝成神蹟：沒有動畫、沒有鐘聲，音樂降為近乎無聲。 */
@@ -893,11 +910,14 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     const verse = String(text ?? '');
     const late = [refEl, quipEl];
     for (const el of late) el?.classList.remove('reveal-late');
+    verseEl?.classList?.remove('inscribing');
     if (!plan.animate || reduced) {
       if (verseEl) verseEl.textContent = verse;
       return { total: 0 };
     }
-    const { chars, delays, total } = revealSchedule(verse);
+    const { chars, delays, total } = revealSchedule(verse, {
+      startDelay: REVEAL_START, perChar: REVEAL_PER_CHAR, maxTotal: REVEAL_MAX_TOTAL, fade: CH_RISE_MAX, jitter: REVEAL_JITTER,
+    });
     if (verseEl) {
       verseEl.textContent = '';
       const d = verseEl.ownerDocument ?? doc;
@@ -910,13 +930,17 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         const span = d.createElement('span');
         span.className = 'ch';
         span.style.setProperty('--d', `${delays[i]}s`);
+        // 每字浮出的時長略有不同（確定性），落在 CH_RISE_MIN..CH_RISE_MAX
+        span.style.setProperty('--dur', `${round3(CH_RISE_MIN + (CH_RISE_MAX - CH_RISE_MIN) * charJitter(i + 101))}s`);
         span.setAttribute('aria-hidden', 'true');
         span.textContent = c;
         frag.appendChild(span);
       });
       verseEl.appendChild(frag);
+      verseEl.style?.setProperty('--total', `${total}s`);
+      restartClass(verseEl, 'inscribing'); // 經文後方緩緩上升的金色微塵（純 CSS）
     }
-    const lateAt = [total, quipDelay(total)];
+    const lateAt = [total, quipDelay(total, QUIP_GAP)];
     late.forEach((el, i) => {
       if (!el) return;
       el.style.setProperty('--d', `${lateAt[i]}s`);
@@ -932,8 +956,8 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     doc?.body?.classList.remove('pulsing');
     setWorship('crisis');
     $('notice')?.classList.remove('busy');
-    for (const el of root.querySelectorAll?.('.reveal-late, .ch') ?? []) {
-      el.classList.remove('reveal-late');
+    for (const el of root.querySelectorAll?.('.reveal-late, .ch, .inscribing') ?? []) {
+      el.classList.remove('reveal-late', 'inscribing');
       if (el.classList.contains('ch')) el.classList.remove('ch');
     }
   }

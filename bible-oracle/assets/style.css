@@ -20,11 +20,21 @@
   --beam-cycle: 11s;
   --pulse-time: 1.6s;
   --busy-time: 2.2s;
-  --ch-fade: 0.6s;
   --late-fade: 1.2s;
+  --ch-glow: 255, 212, 140;  /* 字浮現時的金光 */
+  --ch-rise: 0.5em;          /* 字從多低的地方浮起 */
+  --ref-fade: 1.8s;          /* 出處淡入 */
+  --quip-fade: 3s;           /* 「屬靈解讀」淡入（最慢） */
+  --mote-level: 0.55;        /* 經文後方金色微塵的亮度（0 = 關閉） */
+
+  --arch-h: 6rem;            /* 對話框尖拱高度 */
+  --frame-gap: 6px;          /* 雙框內外間距 */
+  --glass-top: 0.8;          /* 煙燻玻璃不透明度（上） */
+  --glass-bottom: 0.9;       /* 煙燻玻璃不透明度（下） */
+  --scene-dim: 0.72;         /* 對話框開啟時場景本身的亮度 */
 
   --hint-breath: 3.2s;
-  --dialog-in: 0.45s;
+  --dialog-in: 0.7s;
 }
 
 * { box-sizing: border-box; }
@@ -185,7 +195,7 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
   transition: opacity 0.6s ease;
 }
 .scene:active { cursor: grabbing; }
-.scene.dim { opacity: 0.55; } /* 對話框開啟時略降場景亮度 */
+.scene.dim { opacity: var(--scene-dim); } /* 對話框開啟時略降場景亮度 */
 .dust { z-index: 1; }
 
 /* 透明按鈕，位置與大小由 sanctuary.js 依十字架計算（WebGL：--cx/--cy/--cw/--ch；2D 後備：--cross-*） */
@@ -273,21 +283,32 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
 }
 
 .ask { display: flex; gap: 0.75rem; }
+/* 輸入框像一道刻字線：只有底部金線，聚焦時金線發光 */
 .ask input {
   flex: 1;
   min-width: 0;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid rgba(var(--gold-rgb), 0.4);
-  background: rgba(5, 4, 3, 0.82);
+  padding: 0.75rem 0.5rem 0.55rem;
+  border: 0;
+  border-bottom: 1px solid rgba(var(--gold-rgb), 0.5);
+  border-radius: 0;
+  background: linear-gradient(to top, rgba(var(--gold-rgb), 0.07), transparent 75%);
   color: var(--text);
+  caret-color: #e6c984;
   font-family: var(--serif);
-  font-size: 1rem;
-  box-shadow: inset 0 0 0.6rem rgba(0, 0, 0, 0.6);
-  transition: box-shadow 0.25s, border-color 0.25s;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-shadow: 0 1px 3px #000;
+  transition: box-shadow 0.4s, border-color 0.4s, background 0.4s;
 }
-.ask input::placeholder { color: var(--faded); opacity: 0.8; }
-.ask input:focus { border-color: var(--gold); box-shadow: 0 0 1.2rem rgba(138, 104, 40, 0.5), inset 0 0 0.6rem rgba(0, 0, 0, 0.6); }
-.ask input:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.ask input::placeholder { color: var(--faded); opacity: 0.75; letter-spacing: 0.15em; }
+.ask input:focus {
+  outline: none;
+  border-bottom-color: #ecd398;
+  background: linear-gradient(to top, rgba(255, 205, 130, 0.13), transparent 85%);
+  box-shadow: 0 12px 18px -12px rgba(255, 200, 120, 0.85), 0 1px 0 rgba(255, 220, 160, 0.55);
+}
+.ask input:focus-visible { outline: none; }
 
 button {
   padding: 0.7rem 1.1rem;
@@ -315,12 +336,13 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 }
 
 .answer { margin-top: 2rem; }
-.asked { margin: 0 0 2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.05em; }
+.asked { margin: 0 0 1.8rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.08em; text-align: center; text-shadow: 0 1px 3px #000; }
 .verse {
+  position: relative;
   margin: 0;
   padding: 0;
-  font-size: 1.35rem;
-  line-height: 2.1;
+  font-size: 1.4rem;
+  line-height: 2.15;
   text-indent: 2em;
   color: var(--text);
   text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.18), 0 1px 3px #000;
@@ -332,12 +354,17 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   font-style: normal;
   color: var(--gold);
   letter-spacing: 0.1em;
+  text-shadow: 0 0 0.5rem rgba(var(--gold-rgb), 0.15), 0 1px 3px #000;
 }
 .quip {
   margin: 2.5rem 0 0;
   text-shadow: 0 1px 3px #000;
-  padding-top: 1.5rem;
-  border-top: 1px solid rgba(var(--gold-rgb), 0.35);
+  padding-top: 1.7rem;
+  /* 分隔：兩側漸隱的細線，中間一點微光 */
+  background:
+    linear-gradient(to right, transparent, rgba(var(--gold-rgb), 0.4)) left 0 top 4px / calc(50% - 0.7rem) 1px no-repeat,
+    linear-gradient(to left, transparent, rgba(var(--gold-rgb), 0.4)) right 0 top 4px / calc(50% - 0.7rem) 1px no-repeat,
+    radial-gradient(circle, rgba(230, 200, 140, 0.85) 0 1.6px, rgba(var(--gold-rgb), 0.25) 2.6px, transparent 6px) 50% 0 / 12px 9px no-repeat;
   color: var(--faded);
   font-size: 1rem;
 }
@@ -355,70 +382,183 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 }
 .colophon p { margin: 0; }
 
-/* ---- 詢問對話框 ---- */
+/* ---- 詢問對話框：尖拱頂的煙燻玻璃，金色細線雙框，光從上方十字架灑下 ----
+   旋鈕：--arch-h 拱高；--frame-gap 內外框間距；--glass-top/--glass-bottom 玻璃不透明度；
+   ::backdrop 的兩個 alpha（中央/邊緣）為背後壓暗程度；--scene-dim 場景本身的亮度。 */
 .ask-dialog {
+  --line: rgba(var(--gold-rgb), 0.55);
+  --line-in: rgba(var(--gold-rgb), 0.26);
   width: min(36rem, calc(100vw - 2rem));
-  max-height: 86vh;
-  max-height: 86dvh;
+  max-width: calc(100vw - 1rem); /* 蓋掉 UA 的 dialog:modal max-width（100% - 2em - 6px） */
+  max-height: 88vh;
+  max-height: 88dvh;
   margin: auto;
-  padding: 1.6rem 1.6rem 1.8rem;
+  padding: 1.1rem 1.9rem 2.4rem;
+  overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid rgba(var(--gold-rgb), 0.5);
-  border-radius: 2px;
-  background: #080605;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--gold-rgb), 0.35) transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--text);
-  box-shadow: 0 0 3rem rgba(0, 0, 0, 0.9), 0 0 2rem rgba(var(--gold-rgb), 0.12);
+  /* 背景圖層固定在框上（不隨內容捲動），由上到下：拱的外線、拱的內線、四邊外線、四邊內線、角飾、頂光、玻璃 */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M0 100C0 50 34 17 50 0C66 17 100 50 100 100' fill='none' stroke='rgb(201,168,103)' stroke-opacity='.62' stroke-width='2' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") 0 0 / 100% var(--arch-h) no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M0 100C0 50 34 17 50 0C66 17 100 50 100 100' fill='none' stroke='rgb(201,168,103)' stroke-opacity='.3' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") var(--frame-gap) var(--frame-gap) / calc(100% - 2 * var(--frame-gap)) calc(var(--arch-h) - var(--frame-gap)) no-repeat,
+    linear-gradient(var(--line), var(--line)) left 0 top var(--arch-h) / 1px calc(100% - var(--arch-h)) no-repeat,
+    linear-gradient(var(--line), var(--line)) right 0 top var(--arch-h) / 1px calc(100% - var(--arch-h)) no-repeat,
+    linear-gradient(var(--line), var(--line)) left 0 bottom 0 / 100% 1px no-repeat,
+    linear-gradient(var(--line-in), var(--line-in)) left var(--frame-gap) top var(--arch-h) / 1px calc(100% - var(--arch-h) - var(--frame-gap)) no-repeat,
+    linear-gradient(var(--line-in), var(--line-in)) right var(--frame-gap) top var(--arch-h) / 1px calc(100% - var(--arch-h) - var(--frame-gap)) no-repeat,
+    linear-gradient(var(--line-in), var(--line-in)) left var(--frame-gap) bottom var(--frame-gap) / calc(100% - 2 * var(--frame-gap)) 1px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Cg fill='none' stroke='rgb(201,168,103)' stroke-opacity='.55' stroke-width='1'%3E%3Cpath d='M3.5 22V5M8 26.5h17'/%3E%3Cpath d='M9 21c0-5 3-8 8-8' stroke-opacity='.4'/%3E%3C/g%3E%3Cpath d='M3.5 23.5l3 3-3 3-3-3z' fill='rgb(214,180,110)' fill-opacity='.7'/%3E%3C/svg%3E") left calc(var(--frame-gap) + 3px) bottom calc(var(--frame-gap) + 3px) / 30px 30px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Cg transform='translate(30 0) scale(-1 1)'%3E%3Cg fill='none' stroke='rgb(201,168,103)' stroke-opacity='.55' stroke-width='1'%3E%3Cpath d='M3.5 22V5M8 26.5h17'/%3E%3Cpath d='M9 21c0-5 3-8 8-8' stroke-opacity='.4'/%3E%3C/g%3E%3Cpath d='M3.5 23.5l3 3-3 3-3-3z' fill='rgb(214,180,110)' fill-opacity='.7'/%3E%3C/g%3E%3C/svg%3E") right calc(var(--frame-gap) + 3px) bottom calc(var(--frame-gap) + 3px) / 30px 30px no-repeat,
+    radial-gradient(ellipse 55% 30% at 50% 0%, rgba(255, 214, 150, 0.17), transparent 75%),
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(214, 150, 70, 0.09), transparent 80%),
+    linear-gradient(to right, transparent 38%, rgba(255, 210, 140, 0.035) 50%, transparent 62%),
+    linear-gradient(to bottom, rgba(16, 11, 8, var(--glass-top)), rgba(7, 5, 4, var(--glass-bottom)));
+  clip-path: polygon(
+    0% calc(var(--arch-h) * 1), 0.25% calc(var(--arch-h) * 0.926), 0.97% calc(var(--arch-h) * 0.855),
+    2.12% calc(var(--arch-h) * 0.786), 3.66% calc(var(--arch-h) * 0.72), 5.56% calc(var(--arch-h) * 0.657),
+    7.78% calc(var(--arch-h) * 0.596), 10.27% calc(var(--arch-h) * 0.537), 12.99% calc(var(--arch-h) * 0.481),
+    15.92% calc(var(--arch-h) * 0.427), 19% calc(var(--arch-h) * 0.376), 22.2% calc(var(--arch-h) * 0.328),
+    25.49% calc(var(--arch-h) * 0.281), 28.81% calc(var(--arch-h) * 0.238), 32.14% calc(var(--arch-h) * 0.196),
+    35.44% calc(var(--arch-h) * 0.158), 38.66% calc(var(--arch-h) * 0.121), 41.76% calc(var(--arch-h) * 0.087),
+    44.71% calc(var(--arch-h) * 0.056), 47.47% calc(var(--arch-h) * 0.027), 50% 0,
+    52.53% calc(var(--arch-h) * 0.027), 55.29% calc(var(--arch-h) * 0.056), 58.24% calc(var(--arch-h) * 0.087),
+    61.34% calc(var(--arch-h) * 0.121), 64.56% calc(var(--arch-h) * 0.158), 67.86% calc(var(--arch-h) * 0.196),
+    71.19% calc(var(--arch-h) * 0.238), 74.51% calc(var(--arch-h) * 0.281), 77.8% calc(var(--arch-h) * 0.328),
+    81% calc(var(--arch-h) * 0.376), 84.08% calc(var(--arch-h) * 0.427), 87.01% calc(var(--arch-h) * 0.481),
+    89.73% calc(var(--arch-h) * 0.537), 92.22% calc(var(--arch-h) * 0.596), 94.44% calc(var(--arch-h) * 0.657),
+    96.34% calc(var(--arch-h) * 0.72), 97.88% calc(var(--arch-h) * 0.786), 99.03% calc(var(--arch-h) * 0.855),
+    99.75% calc(var(--arch-h) * 0.926), 100% calc(var(--arch-h) * 1),
+    100% 100%, 0 100%);
 }
+.ask-dialog:focus-visible { outline: none; }
 .ask-dialog[open] { animation: dialog-in var(--dialog-in) ease-out; }
-.ask-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+.ask-dialog::backdrop {
+  background: radial-gradient(ellipse 75% 70% at 50% 45%, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.72)); /* 舊版瀏覽器的 ::backdrop 不繼承變數，故寫死 */
+}
 @keyframes dialog-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
 }
+/* 拱頂下的一點光：光源 + 往下的一縷細光 */
+.arch-light {
+  height: 2.6rem;
+  margin: -0.2rem auto 0.2rem;
+  width: 4rem;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 238, 200, 0.95) 0 1.3px, rgba(255, 205, 130, 0.45) 2.6px, rgba(255, 190, 110, 0.12) 9px, transparent 26px),
+    linear-gradient(to bottom, rgba(255, 214, 150, 0.4), transparent) 50% 1.1rem / 1px 1.5rem no-repeat;
+}
 .dialog-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2.6rem 1fr 2.6rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.2rem;
-  padding-bottom: 0.8rem;
-  border-bottom: 1px solid rgba(var(--gold-rgb), 0.3);
+  gap: 0.5rem;
+  margin-bottom: 1.6rem;
+  padding-bottom: 1.3rem;
+  /* 十字分隔：兩側漸隱金線，中間一個小十字與微光 */
+  background:
+    linear-gradient(to right, transparent, rgba(var(--gold-rgb), 0.55)) left 0 bottom 9px / calc(50% - 0.9rem) 1px no-repeat,
+    linear-gradient(to left, transparent, rgba(var(--gold-rgb), 0.55)) right 0 bottom 9px / calc(50% - 0.9rem) 1px no-repeat,
+    linear-gradient(#d9b86c, #d9b86c) 50% 100% / 1px 17px no-repeat,
+    linear-gradient(#d9b86c, #d9b86c) 50% calc(100% - 11px) / 9px 1px no-repeat,
+    radial-gradient(circle, rgba(255, 205, 130, 0.28), transparent 70%) 50% 100% / 44px 30px no-repeat;
 }
 .dialog-head h2 {
+  grid-column: 2;
   margin: 0;
-  font-size: 1.2rem;
+  text-align: center;
+  font-size: 1.3rem;
   font-weight: 400;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.55em;
+  text-indent: 0.55em;
   color: var(--gold-title);
+  text-shadow: 0 0 1.2rem rgba(var(--gold-rgb), 0.35), 0 0 3rem rgba(var(--blood), 0.5), 0 1px 2px #000;
 }
 .close {
+  grid-column: 3;
   flex: none;
   width: 2.6rem;
   height: 2.6rem;
   padding: 0;
   border-radius: 50%;
+  border-color: rgba(var(--gold-rgb), 0.4);
+  background: transparent;
   font-size: 1.5rem;
   line-height: 1;
   letter-spacing: 0;
 }
+/* 對話框內的按鈕：金色細框加一圈內框，像鑲邊 */
+.ask-dialog button:not(.close) {
+  background: rgba(8, 6, 5, 0.35);
+  box-shadow: inset 0 0 0 3px rgba(8, 6, 5, 0), inset 0 0 0 4px rgba(var(--gold-rgb), 0.16);
+}
+.ask-dialog button:not(.close):hover, .ask-dialog button:not(.close):focus-visible {
+  background: rgba(var(--gold-rgb), 0.1);
+  box-shadow: inset 0 0 0 3px rgba(8, 6, 5, 0), inset 0 0 0 4px rgba(var(--gold-rgb), 0.3), 0 0 1.2rem rgba(138, 104, 40, 0.45);
+}
 
-/* ---- 揭曉：逐字浮現、出處與補刀延遲淡入 ---- */
+/* ---- 揭曉：字從金光中緩緩浮起成形；出處輕輕淡入；「屬靈解讀」最後、最慢、最暗 ----
+   旋鈕：每字延遲/時長/總長在 sanctuary.js 檔頭 REVEAL_* / CH_RISE_*；
+   --ch-glow 浮現時的光色；--ch-rise 起始位移；--ref-fade/--quip-fade 出處與解讀淡入秒數；--mote-level 微塵亮度。 */
 .ch {
-  display: inline; /* 不用 inline-block，否則標點會失去中文斷行規則而單獨成行 */
+  display: inline; /* 不用 inline-block/transform，否則標點會失去中文斷行規則而單獨成行 */
+  position: relative;
+  animation: ch-rise var(--dur, 1.8s) cubic-bezier(0.25, 0.55, 0.3, 1) var(--d, 0s) both;
+}
+@keyframes ch-rise {
+  0%   { top: var(--ch-rise); opacity: 0; color: transparent; text-shadow: 0 0 18px rgba(var(--ch-glow), 0), 0 0 3px rgba(var(--ch-glow), 0); }
+  22%  { opacity: 1; color: transparent; text-shadow: 0 0 14px rgba(var(--ch-glow), 0.9), 0 0 3px rgba(255, 236, 196, 0.75); }
+  55%  { top: 0.08em; color: rgba(255, 238, 205, 0.8); text-shadow: 0 0 12px rgba(var(--ch-glow), 0.75), 0 0 2px rgba(255, 236, 196, 0.5); }
+  80%  { top: 0; color: rgb(238, 224, 192); text-shadow: 0 0 10px rgba(var(--ch-glow), 0.42), 0 1px 3px rgba(0, 0, 0, 0.6); }
+  100% { top: 0; opacity: 1; color: var(--text); text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.18), 0 1px 3px #000; }
+}
+/* 浮現期間，經文後方有幾點金色微塵緩緩上升後消散（只用 opacity/transform） */
+.verse.inscribing::before, .verse.inscribing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   opacity: 0;
-  text-shadow: 0 0 0.9rem rgba(var(--gold-rgb), 0.8), 0 0 1.8rem rgba(var(--gold-rgb), 0.45);
-  animation: ch-in var(--ch-fade) ease-out forwards;
-  animation-delay: var(--d, 0s);
 }
-@keyframes ch-in {
-  to { opacity: 1; text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.18), 0 1px 3px #000; }
+.verse.inscribing::before {
+  background:
+    radial-gradient(circle at 9% 78%, rgba(var(--ch-glow), 0.8) 0 1.1px, transparent 2.6px),
+    radial-gradient(circle at 31% 92%, rgba(var(--ch-glow), 0.6) 0 0.9px, transparent 2.2px),
+    radial-gradient(circle at 56% 70%, rgba(var(--ch-glow), 0.75) 0 1.2px, transparent 2.8px),
+    radial-gradient(circle at 78% 88%, rgba(var(--ch-glow), 0.6) 0 0.9px, transparent 2.2px),
+    radial-gradient(circle at 94% 66%, rgba(var(--ch-glow), 0.7) 0 1px, transparent 2.4px);
+  animation: mote-rise calc(var(--total, 7s) + 3s) ease-out 0.3s both;
 }
-.reveal-late {
-  opacity: 0;
-  animation: late-in var(--late-fade) ease-out forwards;
-  animation-delay: var(--d, 0s);
+.verse.inscribing::after {
+  background:
+    radial-gradient(circle at 19% 96%, rgba(var(--ch-glow), 0.6) 0 0.9px, transparent 2.2px),
+    radial-gradient(circle at 43% 84%, rgba(var(--ch-glow), 0.8) 0 1.1px, transparent 2.6px),
+    radial-gradient(circle at 67% 98%, rgba(var(--ch-glow), 0.55) 0 0.8px, transparent 2px),
+    radial-gradient(circle at 86% 80%, rgba(var(--ch-glow), 0.7) 0 1px, transparent 2.4px);
+  animation: mote-rise calc(var(--total, 7s) + 5s) ease-out 1.6s both;
 }
-@keyframes late-in { to { opacity: 1; } }
+@keyframes mote-rise {
+  0%   { opacity: 0; transform: translateY(1.8em); }
+  25%  { opacity: var(--mote-level); }
+  70%  { opacity: calc(var(--mote-level) * 0.5); }
+  100% { opacity: 0; transform: translateY(-2.2em); }
+}
+.reveal-late { animation: late-in var(--late-fade) ease-out var(--d, 0s) both; }
+.ref.reveal-late { animation: ref-in var(--ref-fade) cubic-bezier(0.25, 0.55, 0.3, 1) var(--d, 0s) both; }
+.quip.reveal-late { animation: late-in var(--quip-fade) cubic-bezier(0.45, 0, 0.25, 1) var(--d, 0s) both; }
+@keyframes late-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ref-in {
+  0%   { opacity: 0; transform: translateY(0.4em); text-shadow: 0 0 14px rgba(var(--ch-glow), 0.8); }
+  60%  { opacity: 1; text-shadow: 0 0 10px rgba(var(--ch-glow), 0.4); }
+  100% { opacity: 1; transform: none; text-shadow: 0 0 0.5rem rgba(var(--gold-rgb), 0.15), 0 1px 3px #000; }
+}
 
 /* ---- 靜音鍵 ---- */
 .mute {
@@ -489,8 +629,12 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   .masthead h1 { font-size: 1.4rem; letter-spacing: 0.35em; text-indent: 0.35em; }
   .subtitle { font-size: 0.8rem; }
   .cross-hint { font-size: 1.1rem; }
-  .ask-dialog { width: 94vw; padding: 1.2rem 1.1rem 1.4rem; }
-  .verse { font-size: 1.2rem; }
+  :root { --arch-h: 4.6rem; --frame-gap: 5px; }
+  .ask-dialog { width: calc(100vw - 1rem); max-height: 92dvh; padding: 0.6rem 1.15rem 2rem; }
+  .arch-light { height: 2.2rem; }
+  .dialog-head { margin-bottom: 1.3rem; }
+  .dialog-head h2 { font-size: 1.15rem; letter-spacing: 0.4em; text-indent: 0.4em; }
+  .verse { font-size: 1.22rem; }
   .ask { flex-direction: column; }
   .ask button { width: 100%; }
 }
@@ -499,5 +643,6 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .beams { opacity: 1; }
-  .ch, .reveal-late { opacity: 1; transform: none; }
+  .ch, .reveal-late { opacity: 1; transform: none; top: 0; }
+  .verse.inscribing::before, .verse.inscribing::after { display: none; }
 }
