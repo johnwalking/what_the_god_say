@@ -1,8 +1,8 @@
-/* 黑暗聖殿：近黑底、低飽和暗金、斜射光束、霧、燭光、底部跪拜教徒剪影。
+/* 黑暗聖殿：近黑底、低飽和暗金、斜射光束、霧、燭光、十字架與十二門徒（canvas，見 sanctuary.js）。
    常用旋鈕都在 :root：
    --bg/--gold/--faded/--text 色票；--vignette 暗角深度；--beam-level 光束亮度；
-   --fog-speed 霧漂移秒數；--candle-level 燭光亮度；--worship-breath 呼吸秒數；
-   --worship-bow 低頭/舉手過渡秒數；--worship-dark-front/back 前後排剪影顏色。 */
+   --fog-speed 霧漂移秒數；--candle-level 燭光亮度；--hint-breath 提示呼吸秒數；
+   --dialog-in 對話框淡入秒數。場景的軌道/縮放/自動環繞旋鈕在 sanctuary.js 檔頭。 */
 :root {
   --bg: #050403;
   --gold: #b8995a;
@@ -23,12 +23,8 @@
   --ch-fade: 0.6s;
   --late-fade: 1.2s;
 
-  --worship-height: 22vh;
-  --worship-breath: 7.5s;
-  --worship-bow: 0.8s;
-  --worship-fade-in: 3s;
-  --worship-dark-front: #020101;
-  --worship-dark-back: #0e0907;
+  --hint-breath: 3.2s;
+  --dialog-in: 0.45s;
 }
 
 * { box-sizing: border-box; }
@@ -38,10 +34,10 @@ html { background: var(--bg); overflow-x: clip; }
 body {
   position: relative;
   margin: 0;
-  padding: 5rem 1.25rem calc(var(--worship-height) + 3rem);
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow-x: clip;
+  padding: 1.6rem 1.25rem 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--serif);
@@ -177,90 +173,97 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
   z-index: 1;
 }
 
-/* ---- 底部教徒：近黑剪影，後排較小較暗；不使用 filter ---- */
-.congregation {
+/* ---- 場景：全螢幕畫布（霧與光束之上、內容之下）與十字架按鈕 ---- */
+.scene {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--worship-height);
-  pointer-events: none;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1;
-  animation: worship-in var(--worship-fade-in) ease-out both;
+  touch-action: none;
+  cursor: grab;
 }
-/* 剪影後方的暖色背光，讓黑色輪廓讀得出來（取代昂貴的 drop-shadow） */
-.congregation::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 135%;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(150, 92, 40, 0.34), transparent 70%),
-    linear-gradient(to top, rgba(var(--blood), 0.45), transparent 75%);
-}
-@keyframes worship-in { from { opacity: 0; } to { opacity: 1; } }
+.scene:active { cursor: grabbing; }
+.dust { z-index: 1; }
 
-.worshipper {
-  position: absolute;
-  left: var(--x);
-  bottom: -1.2vh; /* 略微沉入畫面底；舉手時整排抬高 1.2vh 剛好踏在底邊 */
-  transition: translate 1.4s ease;
-  height: calc(var(--worship-height) * 0.92 * var(--s, 1));
-  aspect-ratio: 1;
-  margin-left: calc(var(--worship-height) * -0.46 * var(--s, 1));
-  color: var(--worship-dark-front);
+/* 透明按鈕，位置與大小由 sanctuary.js 依十字架計算（--cross-*） */
+.cross {
+  position: fixed;
+  left: var(--cross-x, 50%);
+  top: var(--cross-cy, 40%);
+  width: var(--cross-w, 56px);
+  height: var(--cross-h, 96px);
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  touch-action: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.worshipper[data-row="0"] {
-  bottom: calc(var(--worship-height) * 0.17 - 1.2vh);
-  height: calc(var(--worship-height) * 0.74 * var(--s, 1));
-  margin-left: calc(var(--worship-height) * -0.37 * var(--s, 1));
-  color: var(--worship-dark-back);
+.cross:hover { background: transparent; box-shadow: none; }
+.cross:focus-visible {
+  background: transparent;
+  outline: 2px solid #dcc17f;
+  outline-offset: 6px;
+  box-shadow: 0 0 1.6rem rgba(var(--gold-rgb), 0.5);
 }
-.worshipper.flip svg { transform: scaleX(-1); }
-.worshipper svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
-/* 姿勢：transform 做姿勢（有過渡），獨立的 translate 屬性做呼吸（動畫），兩者互不干擾 */
-.worshipper .w-torso,
-.worshipper .w-head {
-  transform-box: view-box;
-  transition: transform var(--worship-bow) ease-in-out;
+/* 「點擊這裡」提示：十字架正上方，呼吸閃動，箭頭上下浮動 */
+.cross-hint {
+  position: fixed;
+  left: var(--cross-x, 50%);
+  top: var(--cross-top, 30%);
+  transform: translate(-50%, -100%);
+  z-index: 3;
+  margin: 0;
+  width: max-content;
+  text-align: center;
+  color: #e6c984;
+  font-size: 1.2rem;
+  line-height: 1.5;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+  text-shadow: 0 0 0.9rem rgba(var(--gold-rgb), 0.75), 0 0 2rem rgba(var(--gold-rgb), 0.35), 0 1px 3px #000;
+  pointer-events: none;
+  animation: hint-breathe var(--hint-breath) ease-in-out infinite;
+  transition: opacity 1.2s ease;
 }
-.worshipper .w-torso { transform-origin: 40px 64px; animation: breath var(--worship-breath) ease-in-out var(--d, 0s) infinite alternate; }
-.worshipper .w-head { transform-origin: 51px 31px; }
-.worshipper .w-arms-up { opacity: 0; transition: opacity 0.7s ease; }
-.worshipper .w-arms-down { opacity: 1; transition: opacity 0.7s ease; }
-@keyframes breath { from { translate: 0 1.6px; } to { translate: 0 -1.6px; } }
-
-/* raise 時整排微微抬高 */
-.congregation[data-state="raise"] .worshipper { translate: 0 -1.2vh; }
-/* bow：頭與上身前傾 */
-.congregation[data-state="bow"] .w-torso { transform: rotate(16deg); }
-.congregation[data-state="bow"] .w-head { transform: rotate(5deg); }
-/* raise：雙手高舉，身體微挺 */
-.congregation[data-state="raise"] .w-torso { transform: rotate(-5deg); }
-.congregation[data-state="raise"] .w-head { transform: rotate(-4deg); }
-.congregation[data-state="raise"] .w-arms-up { opacity: 1; }
-.congregation[data-state="raise"] .w-arms-down { opacity: 0; }
-/* still：深深低頭，完全靜止（沒有呼吸、沒有光柱） */
-.congregation[data-state="still"] .w-torso { transform: rotate(20deg); animation: none; }
-.congregation[data-state="still"] .w-head { transform: rotate(8deg); }
+.cross-hint[hidden] { display: none; }
+.cross-hint.fade { opacity: 0 !important; animation: none; }
+.cross-hint .arrow {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: 0;
+  text-indent: 0;
+  animation: arrow-bob 1.6s ease-in-out infinite;
+}
+@keyframes hint-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes arrow-bob {
+  0%, 100% { transform: translateY(-2px); }
+  50% { transform: translateY(6px); }
+}
 
 /* ---- 版面 ---- */
-.page { position: relative; z-index: 2; max-width: 40rem; margin: 0 auto; }
+.page { position: relative; z-index: 2; max-width: 40rem; margin: 0 auto; pointer-events: none; }
 
-.masthead { text-align: center; margin-bottom: 3rem; }
+.masthead { text-align: center; }
 .masthead h1 {
-  margin: 1.2rem 0 0.6rem;
-  font-size: 2rem;
+  margin: 0.9rem 0 0.4rem;
+  font-size: 1.7rem;
   font-weight: 400;
   letter-spacing: 0.5em;
   text-indent: 0.5em;
   color: var(--gold-title);
   text-shadow: 0 0 1.2rem rgba(var(--gold-rgb), 0.28), 0 0 3rem rgba(var(--blood), 0.5), 0 1px 2px #000;
 }
-.subtitle { margin: 0 0 1.2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.15em; }
+.subtitle { margin: 0 0 0.9rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.15em; }
 .rule {
   height: 1px;
   background: linear-gradient(to right, transparent, var(--gold), transparent);
@@ -309,7 +312,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   50%      { opacity: 1; text-shadow: 0 0 0.8rem rgba(var(--gold-rgb), 0.45); }
 }
 
-.answer { margin-top: 3rem; }
+.answer { margin-top: 2rem; }
 .asked { margin: 0 0 2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.05em; }
 .verse {
   margin: 0;
@@ -338,7 +341,64 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 }
 .actions { margin-top: 2.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
-.colophon { margin-top: 4rem; text-align: center; color: var(--faded); font-size: 0.8rem; }
+.colophon {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0.7rem;
+  text-align: center;
+  color: var(--faded);
+  font-size: 0.78rem;
+  opacity: 0.55;
+}
+.colophon p { margin: 0; }
+
+/* ---- 詢問對話框 ---- */
+.ask-dialog {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: 86vh;
+  max-height: 86dvh;
+  margin: auto;
+  padding: 1.6rem 1.6rem 1.8rem;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--gold-rgb), 0.5);
+  border-radius: 2px;
+  background: #080605;
+  color: var(--text);
+  box-shadow: 0 0 3rem rgba(0, 0, 0, 0.9), 0 0 2rem rgba(var(--gold-rgb), 0.12);
+}
+.ask-dialog[open] { animation: dialog-in var(--dialog-in) ease-out; }
+.ask-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(var(--gold-rgb), 0.3);
+}
+.dialog-head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  color: var(--gold-title);
+}
+.close {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
 
 /* ---- 揭曉：逐字浮現、出處與補刀延遲淡入 ---- */
 .ch {
@@ -380,7 +440,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .hint {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--worship-height) + 1.2rem);
+  bottom: 2.6rem;
   transform: translateX(-50%);
   z-index: 3;
   margin: 0;
@@ -421,17 +481,16 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ---- 行動裝置：後排隱藏，前排縮小，不遮住表單與答案 ---- */
+/* ---- 行動裝置：標題縮小；對話框佔 94% 寬 ---- */
 @media (max-width: 599px) {
-  :root { --worship-height: 15vh; }
-  body { padding: 3.5rem 1rem calc(var(--worship-height) + 2.5rem); }
-  .masthead h1 { font-size: 1.6rem; letter-spacing: 0.35em; text-indent: 0.35em; }
+  body { padding: 1.1rem 1rem 0; }
+  .masthead h1 { font-size: 1.4rem; letter-spacing: 0.35em; text-indent: 0.35em; }
+  .subtitle { font-size: 0.8rem; }
+  .cross-hint { font-size: 1.1rem; }
+  .ask-dialog { width: 94vw; padding: 1.2rem 1.1rem 1.4rem; }
   .verse { font-size: 1.2rem; }
   .ask { flex-direction: column; }
   .ask button { width: 100%; }
-  .worshipper[data-row="0"] { display: none; }
-  .worshipper:nth-child(4n) { display: none; } /* 前排再疏一點，免得擠在一起 */
-  .congregation::before { height: 120%; }
 }
 
 /* ---- 減少動態：不漂浮、不逐字、教徒維持對應姿勢但沒有過渡 ---- */

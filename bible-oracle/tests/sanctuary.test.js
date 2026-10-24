@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, worshipLayout, worshipperSVG, congregationHTML, worshipState, createSanctuary } from '../assets/sanctuary.js';
+import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, worshipState, discipleRings, projectDisciple, clampPitch, clampZoom, sceneSpeed, createSanctuary } from '../assets/sanctuary.js';
 
 test('splitGraphemes 依碼點拆分且容忍空值', () => {
   assert.deepEqual(splitGraphemes('主的旨意'), ['主', '的', '旨', '意']);
@@ -49,56 +49,68 @@ test('revealSchedule maxTotal 過小時延遲仍嚴格遞增且有限', () => {
   }
 });
 
-// ---- 教徒 ----
-test('worshipLayout 確定性、數量、兩排、範圍與間距', () => {
-  const a = worshipLayout();
-  assert.equal(a.length, 11);
-  assert.deepEqual(a, worshipLayout({ count: 11, seed: 7 }));
-  assert.notDeepEqual(a, worshipLayout({ seed: 8 }));
-  assert.ok(a.some((w) => w.row === 0) && a.some((w) => w.row === 1));
-  for (const w of a) {
-    assert.ok(w.x >= 0 && w.x <= 100, `x=${w.x}`);
-    assert.ok(w.scale >= 0.8 && w.scale <= 1.15, `scale=${w.scale}`);
-    assert.ok(w.delay >= 0 && w.delay <= 6, `delay=${w.delay}`);
-    assert.ok(w.row === 0 || w.row === 1);
-    assert.equal(typeof w.flip, 'boolean');
+// ---- 十二門徒 ----
+test('discipleRings 確定性、數量、三層、半徑遞增、方向交替、phase 範圍', () => {
+  const a = discipleRings();
+  assert.equal(a.length, 12);
+  assert.deepEqual(a, discipleRings(12));
+  assert.equal(discipleRings(7).length, 7);
+  const byRing = [0, 1, 2].map((r) => a.filter((d) => d.ring === r));
+  for (const g of byRing) assert.ok(g.length >= 3, `ring size ${g.length}`);
+  assert.equal(byRing.reduce((n, g) => n + g.length, 0), 12);
+  assert.ok(byRing[0][0].radius < byRing[1][0].radius && byRing[1][0].radius < byRing[2][0].radius);
+  assert.ok(byRing[0][0].dir !== byRing[1][0].dir && byRing[1][0].dir !== byRing[2][0].dir);
+  assert.ok(byRing[0][0].speed > byRing[2][0].speed);
+  for (const d of a) {
+    assert.ok(d.phase >= 0 && d.phase < Math.PI * 2, `phase=${d.phase}`);
+    assert.ok(d.radius > 0 && d.radius <= 1);
+    assert.ok(d.dir === 1 || d.dir === -1);
   }
-  const xs = a.map((w) => w.x).sort((p, q) => p - q);
-  for (let i = 1; i < xs.length; i += 1) assert.ok(xs[i] - xs[i - 1] >= 4, `gap ${xs[i - 1]}→${xs[i]}`);
+  for (const g of byRing) for (const d of g) assert.equal(d.radius, g[0].radius);
 });
 
-test('worshipLayout 其他數量與 seed 仍符合約束', () => {
-  for (const count of [1, 6, 14]) {
-    for (const seed of [1, 7, 99, 12345]) {
-      const l = worshipLayout({ count, seed });
-      assert.equal(l.length, count);
-      const xs = l.map((w) => w.x).sort((p, q) => p - q);
-      for (let i = 1; i < xs.length; i += 1) assert.ok(xs[i] - xs[i - 1] >= 4);
-    }
-  }
+const view = { t: 0, yaw: 0, pitch: 0.6, zoom: 1, width: 1000, height: 800 };
+const disc = { ring: 1, index: 0, phase: 0, radius: 0.62, dir: 1, speed: 1 };
+
+test('projectDisciple 近處比遠處大且亮，depth 在 0..1', () => {
+  const near = projectDisciple({ ...disc, phase: Math.PI / 2 }, view); // sin>0 → z>0
+  const far = projectDisciple({ ...disc, phase: -Math.PI / 2 }, view);
+  assert.ok(near.z > 0 && far.z < 0);
+  assert.ok(near.scale > far.scale);
+  assert.ok(near.alpha > far.alpha);
+  for (const p of [near, far]) assert.ok(p.depth >= 0 && p.depth <= 1);
+  assert.ok(near.depth > far.depth);
 });
 
-test('worshipperSVG 含四組可選取的 g 與 currentColor', () => {
-  const svg = worshipperSVG();
-  assert.match(svg, /^<svg /);
-  for (const c of ['w-head', 'w-torso', 'w-arms-down', 'w-arms-up']) {
-    assert.equal((svg.match(new RegExp(`<g class="${c}"`, 'g')) || []).length, 1, c);
-  }
-  assert.match(svg, /currentColor/);
-  assert.ok(svg.endsWith('</svg>'));
+test('projectDisciple yaw 加 2π 結果相同；時間依 dir*speed*baseSpeed 前進', () => {
+  const a = projectDisciple(disc, view);
+  const b = projectDisciple(disc, { ...view, yaw: Math.PI * 2 });
+  assert.ok(Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.scale - b.scale) < 1e-9);
+  const c = projectDisciple(disc, { ...view, t: 10, baseSpeed: 0.1 });
+  const d = projectDisciple({ ...disc, phase: 1 }, view); // θ = 0 + 1*1*0.1*10 = 1
+  assert.ok(Math.abs(c.x - d.x) < 1e-6 && Math.abs(c.y - d.y) < 1e-6);
 });
 
-test('congregationHTML 元素數量等於 layout 長度，flip 加 class', () => {
-  const layout = [
-    { x: 10, scale: 1, row: 0, delay: 1.5, flip: false },
-    { x: 50, scale: 0.9, row: 1, delay: 0, flip: true },
-  ];
-  const html = congregationHTML(layout);
-  assert.equal((html.match(/<div class="worshipper/g) || []).length, 2);
-  assert.equal((html.match(/class="worshipper flip"/g) || []).length, 1);
-  assert.match(html, /--x:10%;--s:1;--d:1.5s/);
-  assert.match(html, /data-row="1"/);
-  assert.equal(congregationHTML([]), '');
+test('projectDisciple zoom 放大半徑、pitch 增大使 y 展開增大、cx/cy 為中心', () => {
+  const d = { ...disc, phase: Math.PI / 3 };
+  const lo = projectDisciple(d, view);
+  const hi = projectDisciple(d, { ...view, zoom: 1.5 });
+  assert.ok(Math.abs(hi.x - 500) > Math.abs(lo.x - 500));
+  const flat = projectDisciple(d, { ...view, pitch: 0.2 });
+  const tall = projectDisciple(d, { ...view, pitch: 0.9 });
+  assert.ok(Math.abs(tall.y - 400) > Math.abs(flat.y - 400));
+  const moved = projectDisciple(d, { ...view, cy: 0.46 });
+  assert.ok(Math.abs(moved.y - lo.y + 800 * 0.04) < 1e-6);
+});
+
+test('clampPitch / clampZoom / sceneSpeed', () => {
+  assert.equal(clampPitch(-1), 0.15);
+  assert.equal(clampPitch(5), 1.0);
+  assert.equal(clampPitch(0.5), 0.5);
+  assert.equal(clampZoom(0), 0.6);
+  assert.equal(clampZoom(9), 1.8);
+  assert.equal(clampZoom(1.2), 1.2);
+  assert.deepEqual(['idle', 'bow', 'raise', 'still', '??'].map(sceneSpeed), [1, 0.25, 1.8, 0, 1]);
 });
 
 test('worshipState 對應事件', () => {
@@ -124,30 +136,29 @@ function fakeEl(id) {
   };
 }
 function fakeRoot() {
-  const els = Object.fromEntries(['congregation', 'beams', 'notice'].map((i) => [i, fakeEl(i)]));
+  const els = Object.fromEntries(['scene', 'beams', 'notice'].map((i) => [i, fakeEl(i)]));
   const root = { nodeType: 9, getElementById: (id) => els[id] ?? null, querySelector: () => null, querySelectorAll: () => [] };
   return { root, els };
 }
 
-test('mountCongregation 與 setWorship 設定狀態；calm 設為 still', () => {
+test('setWorship 設定 beams 與 scene 的 data-state；calm 設為 still', () => {
   const { root, els } = fakeRoot();
   const s = createSanctuary({ root, reducedMotion: true });
-  s.mountCongregation();
-  assert.equal((els.congregation.innerHTML.match(/<div class="worshipper/g) || []).length, 11);
   s.setWorship('ask');
-  assert.equal(els.congregation.getAttribute('data-state'), 'bow');
+  assert.equal(els.scene.getAttribute('data-state'), 'bow');
+  assert.equal(els.beams.getAttribute('data-state'), 'bow');
   s.setWorship('reveal');
-  assert.equal(els.congregation.getAttribute('data-state'), 'raise');
+  assert.equal(els.scene.getAttribute('data-state'), 'raise');
   s.setWorship('crisis');
-  assert.equal(els.congregation.getAttribute('data-state'), 'still');
+  assert.equal(els.scene.getAttribute('data-state'), 'still');
   s.setWorship('reset');
-  assert.equal(els.congregation.getAttribute('data-state'), 'idle');
+  assert.equal(els.scene.getAttribute('data-state'), 'idle');
   s.calm();
-  assert.equal(els.congregation.getAttribute('data-state'), 'still');
+  assert.equal(els.scene.getAttribute('data-state'), 'still');
 });
 
 test('缺少元素時控制器不丟錯', () => {
   const root = { nodeType: 9, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] };
   const s = createSanctuary({ root, reducedMotion: true });
-  s.mountCongregation(); s.setWorship('ask'); s.pulse(); s.calm(); s.setBusy(true);
+  s.mountScene(); s.getCrossRect(); s.setWorship('ask'); s.pulse(); s.calm(); s.setBusy(true);
 });

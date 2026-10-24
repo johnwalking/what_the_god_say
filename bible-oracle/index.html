@@ -14,7 +14,7 @@
 <div class="candles" aria-hidden="true"><i></i><i></i></div>
 <div id="beams" class="beams" aria-hidden="true"></div>
 <canvas id="dust" class="dust" aria-hidden="true"></canvas>
-<div id="congregation" class="congregation" aria-hidden="true"></div>
+<canvas id="scene" class="scene" aria-hidden="true"></canvas>
 
 <button type="button" id="mute" class="mute" aria-pressed="false" aria-label="靜音">♪</button>
 
@@ -25,6 +25,20 @@
     <p class="subtitle">凡勞苦擔重擔的人、可以到這裡來</p>
     <div class="rule"></div>
   </header>
+
+  <footer class="colophon">
+    <p>經文引自和合本，一字未改。</p>
+  </footer>
+</main>
+
+<p id="cross-hint" class="cross-hint" aria-hidden="true">點擊這裡<span class="arrow">↓</span></p>
+<button type="button" id="cross" class="cross" aria-label="點擊十字架，向主求問"></button>
+
+<dialog id="ask-dialog" class="ask-dialog" aria-labelledby="dialog-title">
+  <div class="dialog-head">
+    <h2 id="dialog-title">向主求問</h2>
+    <button type="button" id="close-dialog" class="close" aria-label="關閉">×</button>
+  </div>
 
   <form id="ask-form" class="ask" autocomplete="off">
     <label for="question" class="visually-hidden">你的煩惱</label>
@@ -45,11 +59,7 @@
       <button type="button" id="save">存 成 圖 片</button>
     </div>
   </section>
-
-  <footer class="colophon">
-    <p>經文引自和合本，一字未改。</p>
-  </footer>
-</main>
+</dialog>
 
 <p id="hint" class="hint" role="status" hidden>觸碰任一處，聆聽聖樂</p>
 <script type="module" src="assets/app.js"></script>
