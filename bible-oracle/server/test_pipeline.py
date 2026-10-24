@@ -74,3 +74,12 @@ def test_degraded_results_are_not_cached():
     pipeline = make_pipeline(llm)
     assert pipeline.ask(Q).stage == 'top1+template'
     assert pipeline.ask(Q).stage == 'rerank+llm'
+
+
+def test_custom_rerank_fn_is_used():
+    llm = FakeLLM({'quip': GOOD})
+    pipeline = make_pipeline(llm)
+    pipeline.rerank_fn = lambda llm_, question, hits: len(hits) - 1
+    ids = _top_ids(pipeline)
+    answer = pipeline.ask(Q)
+    assert answer.stage == 'rerank+llm' and answer.verse_id == ids[-1]

@@ -30,7 +30,7 @@ class Answer:
 
 
 class Pipeline:
-    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20):
+    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20, rerank_fn=None):
         self.corpus = corpus
         self.retriever = retriever
         self.llm = llm
@@ -38,6 +38,7 @@ class Pipeline:
         self.wrappers = wrappers
         self.cache = cache
         self.k = k
+        self.rerank_fn = rerank_fn or rerank
 
     def rank(self, question: str) -> Tuple[List[str], bool]:
         """候選經文 id，rerank 選中者排第一，其餘維持檢索順序。回傳 (排序, rerank 是否成功)。"""
@@ -51,7 +52,7 @@ class Pipeline:
         if self.llm is None:
             return order, False
         try:
-            chosen = rerank(self.llm, question, hits)
+            chosen = self.rerank_fn(self.llm, question, hits)
         except (LLMError, RerankError):
             return order, False
         order = [order[chosen]] + order[:chosen] + order[chosen + 1:]
