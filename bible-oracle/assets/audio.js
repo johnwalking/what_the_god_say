@@ -29,6 +29,9 @@ export const LFO_HZ = 0.07;         // 緩慢調變速度；調高則呼吸更�
 export const LFO_FILTER_HZ = 400;   // LFO 對低通截止的擺幅（Hz）；調高則明暗起伏更大
 export const LFO_AMP = 0.08;        // LFO 對總音量的擺幅（±比例）；調高則音量起伏更明顯
 export const BELL_LEVEL = 0.18;     // 鐘聲音量（相對於 master）；調高則鐘更突出
+export const BELL_ATTACK_SEC = 0.008; // 鐘聲起音秒數；調高則起音更柔、較不像敲擊
+export const BELL_MIN_GAP_SEC = 1.5;  // 兩次鐘聲的最小間隔；調高則鐘聲更稀疏
+export const STOP_MARGIN_SEC = 0.1;   // stop() 淡出後再多等的緩衝秒數
 export const BELL_DECAY_SEC = 6;    // 鐘聲衰減秒數；調高則餘音更長
 export const BELL_PARTIALS = [[1, 1], [2.76, 0.45], [5.4, 0.2]]; // [基頻倍數, 相對音量]；改倍數會改變鐘的音色
 export const BELL_WET = 0.9;        // 鐘聲送進殘響的比例；調高則更遙遠
@@ -114,11 +117,20 @@ export function createAudio({
 
   const level = () => (muted ? 0 : hushed ? HUSH_LEVEL : MASTER_LEVEL);
 
-  function glideMaster() {
+  let lastBellAt = -Infinity;
+
+  /** 從目前值平滑滑向目標：先錨定目前值，避免取消排程後掉回 0 而爆音。 */
+  function glideMaster(target = level()) {
     if (!ctx || !master) return;
     const now = ctx.currentTime;
-    master.gain.cancelScheduledValues(now);
-    master.gain.setTargetAtTime(level(), now, MUTE_FADE_SEC / 4);
+    const p = master.gain;
+    if (typeof p.cancelAndHoldAtTime === 'function') {
+      p.cancelAndHoldAtTime(now);
+    } else {
+      p.cancelScheduledValues(now);
+      p.setValueAtTime(p.value, now);
+    }
+    p.setTargetAtTime(target, now, MUTE_FADE_SEC / 4);
   }
 
   function osc(type, freq, dest, detune = 0) {
@@ -202,7 +214,7 @@ export function createAudio({
   }
 
   function nextChord() {
-    if (!ctx) return;
+    if (!ctx || ctx.state === 'closed') { timer = null; return; }
     chordIndex += 1;
     const chord = chordAt(chordIndex);
     const now = ctx.currentTime;
@@ -223,8 +235,12 @@ export function createAudio({
       return;
     }
     try {
-      ctx = new AudioContextCtor();
-      try { ctx.resume?.()?.catch?.(noop); } catch { /* 忽略 */ }
+      const mine = new AudioContextCtor();
+      ctx = mine;
+      try {
+        // resume 被拒（例如沒有使用者手勢）：放棄這個 context，下次 start() 可重試
+        mine.resume?.()?.catch?.(() => { if (ctx === mine) teardown(); });
+      } catch { /* 忽略 */ }
       build();
       schedule();
     } catch {
@@ -232,23 +248,44 @@ export function createAudio({
     }
   }
 
-  function teardown() {
+  function release(c, list) {
+    for (const o of list) { try { o.stop(); } catch { /* 忽略 */ } }
+    try { c?.close?.()?.catch?.(noop); } catch { /* 忽略 */ }
+  }
+
+  function clearState() {
     if (timer !== null) clearTimer(timer);
     timer = null;
-    for (const o of oscs) { try { o.stop(); } catch { /* 忽略 */ } }
-    try { ctx?.close?.()?.catch?.(noop); } catch { /* 忽略 */ }
     ctx = null; master = null; reverbIn = null; bellBus = null;
-    oscs = []; bassOscs = []; padOscs = []; chordIndex = 0;
+    oscs = []; bassOscs = []; padOscs = []; chordIndex = 0; lastBellAt = -Infinity;
+  }
+
+  function teardown() {
+    const c = ctx; const list = oscs;
+    clearState();
+    release(c, list);
+  }
+
+  /** 淡出後才收尾；內部狀態立刻清空，之後的 start() 會建立全新的 context。 */
+  function stop() {
+    if (!ctx) return;
+    glideMaster(0);
+    const c = ctx; const list = oscs;
+    clearState();
+    setTimer(() => release(c, list), (MUTE_FADE_SEC + STOP_MARGIN_SEC) * 1000);
   }
 
   function bell() {
     if (!ctx || muted || hushed) return;
+    if (ctx.currentTime - lastBellAt < BELL_MIN_GAP_SEC) return;
     try {
       const now = ctx.currentTime;
+      lastBellAt = now;
       const base = midiToFreq(chordAt(chordIndex).voices[1] + 12);
       for (const [mult, amp] of BELL_PARTIALS) {
         const g = ctx.createGain();
-        g.gain.setValueAtTime(BELL_LEVEL * amp, now);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(BELL_LEVEL * amp, now + BELL_ATTACK_SEC);
         g.gain.exponentialRampToValueAtTime(0.0001, now + BELL_DECAY_SEC);
         g.connect(bellBus);
         const o = ctx.createOscillator();
@@ -267,7 +304,7 @@ export function createAudio({
   return {
     available: true,
     start,
-    stop: teardown,
+    stop,
     setMuted(m) {
       muted = !!m;
       store.set(muted);

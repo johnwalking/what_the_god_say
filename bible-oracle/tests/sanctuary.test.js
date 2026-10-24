@@ -43,3 +43,16 @@ test('roseWindowSVG 產生內外兩圈花瓣與金色環', () => {
   assert.ok((svg.match(/<circle /g) || []).length >= 3);
   assert.ok(svg.endsWith('</svg>'));
 });
+
+test('revealSchedule 200 字時 total 不超過 maxTotal（4.5）', () => {
+  const { total } = revealSchedule('字'.repeat(200));
+  assert.ok(total <= 4.5, `total=${total}`);
+});
+
+test('revealSchedule maxTotal 過小時延遲仍嚴格遞增且有限', () => {
+  const { delays } = revealSchedule('字'.repeat(50), { maxTotal: 0.1 });
+  for (let i = 0; i < delays.length; i++) {
+    assert.ok(Number.isFinite(delays[i]));
+    if (i > 0) assert.ok(delays[i] > delays[i - 1]);
+  }
+});

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC } from '../assets/audio.js';
+import { MUTE_FADE_SEC, midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC } from '../assets/audio.js';
 
 test('midiToFreq', () => {
   assert.equal(midiToFreq(69), 440);
@@ -45,13 +45,13 @@ test('沒有 AudioContext 時回傳無作用物件', () => {
 // ---- 假的 AudioContext：記錄節點、參數排程與連線 ----
 
 class FakeParam {
-  constructor(value = 0) { this.value = value; this.targets = []; this.calls = []; }
-  record(name, v) { this.calls.push(name); if (typeof v === 'number') this.targets.push(v); return this; }
-  setValueAtTime(v) { return this.record('setValueAtTime', v); }
-  linearRampToValueAtTime(v) { return this.record('linearRampToValueAtTime', v); }
-  exponentialRampToValueAtTime(v) { return this.record('exponentialRampToValueAtTime', v); }
-  setTargetAtTime(v) { return this.record('setTargetAtTime', v); }
-  cancelScheduledValues() { return this.record('cancelScheduledValues'); }
+  constructor(value = 0) { this.value = value; this.targets = []; this.calls = []; this.events = []; }
+  record(name, v, t) { this.calls.push(name); this.events.push({ name, v, t }); if (typeof v === 'number') this.targets.push(v); return this; }
+  setValueAtTime(v, t) { return this.record('setValueAtTime', v, t); }
+  linearRampToValueAtTime(v, t) { return this.record('linearRampToValueAtTime', v, t); }
+  exponentialRampToValueAtTime(v, t) { return this.record('exponentialRampToValueAtTime', v, t); }
+  setTargetAtTime(v, t) { return this.record('setTargetAtTime', v, t); }
+  cancelScheduledValues(t) { return this.record('cancelScheduledValues', undefined, t); }
 }
 
 class FakeNode {
@@ -64,14 +64,16 @@ class FakeNode {
     this.connections = [];
     this.started = false;
     this.stopped = false;
+    this.stopCalls = 0;
+    this.disconnected = 0;
   }
   connect(dst) { this.connections.push(dst); return dst; }
-  disconnect() { this.connections = []; }
+  disconnect() { this.connections = []; this.disconnected++; }
   start() { this.started = true; }
-  stop() { this.stopped = true; }
+  stop() { this.stopped = true; this.stopCalls++; }
 }
 
-function makeFakeCtx() {
+function makeFakeCtx({ rejectResume = false, hold = false } = {}) {
   const created = [];
   class FakeAudioContext {
     constructor() {
@@ -84,7 +86,12 @@ function makeFakeCtx() {
       this.resumeCalls = 0;
       this.buffers = 0;
     }
-    make(kind) { const n = new FakeNode(kind); this.nodes.push(n); return n; }
+    make(kind) {
+      const n = new FakeNode(kind);
+      if (hold) n.gain.cancelAndHoldAtTime = function (t) { return this.record('cancelAndHoldAtTime', undefined, t); };
+      this.nodes.push(n);
+      return n;
+    }
     createOscillator() { return this.make('oscillator'); }
     createGain() { return this.make('gain'); }
     createConvolver() { return this.make('convolver'); }
@@ -93,8 +100,8 @@ function makeFakeCtx() {
       this.buffers++;
       return { numberOfChannels: ch, length: len, getChannelData: () => new Float32Array(len) };
     }
-    resume() { this.resumeCalls++; this.state = 'running'; return Promise.resolve(); }
-    close() { this.state = 'closed'; return Promise.resolve(); }
+    resume() { this.resumeCalls++; if (rejectResume) return Promise.reject(new Error('blocked')); this.state = 'running'; return Promise.resolve(); }
+    close() { this.closeCalls = (this.closeCalls || 0) + 1; this.state = 'closed'; return Promise.resolve(); }
     count(kind) { return this.nodes.filter((n) => n.kind === kind).length; }
     master() { return this.nodes.find((n) => n.kind === 'gain' && n.connections.includes(this.destination)); }
   }
@@ -119,8 +126,8 @@ function makeTimers() {
   };
 }
 
-function setup({ muted = false } = {}) {
-  const { FakeAudioContext, created } = makeFakeCtx();
+function setup({ muted = false, ...fakeOpts } = {}) {
+  const { FakeAudioContext, created } = makeFakeCtx(fakeOpts);
   const timers = makeTimers();
   const data = new Map(muted ? [['sanctuary-muted', '1']] : []);
   const storage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) };
@@ -199,9 +206,139 @@ test('換和弦以 setTargetAtTime 滑動、不新增 oscillator；stop() 之後
   audio.stop();
   const after = glides();
   const count = ctx().nodes.length;
-  assert.equal(timers.size, 0);
   timers.advance(CHORD_SEC * 5000);
   assert.equal(glides(), after);
   assert.equal(ctx().nodes.length, count);
   assert.doesNotThrow(() => { audio.bell(); audio.setMuted(true); audio.hush(true); });
+});
+
+// ---- 審查修正 ----
+
+test('淡入途中靜音：以目前值錨定，不會先跳到 0', () => {
+  const { audio, ctx } = setup();
+  audio.start();
+  const g = ctx().master().gain;
+  ctx().currentTime = 1.5;
+  g.value = 0.125;
+  audio.setMuted(true);
+  const after = g.events.slice(g.events.findIndex((e) => e.name === 'linearRampToValueAtTime') + 1);
+  assert.ok(!after.some((e) => e.name === 'setValueAtTime' && e.v === 0 && e.t === 1.5));
+  const anchor = after.findIndex((e) => e.name === 'setValueAtTime' && e.v === 0.125 && e.t === 1.5);
+  const target = after.findIndex((e) => e.name === 'setTargetAtTime' && e.v === 0);
+  assert.ok(anchor >= 0 && target > anchor);
+  assert.equal(after[0].name, 'cancelScheduledValues');
+});
+
+test('有 cancelAndHoldAtTime 時用它保留目前值，且排在新目標之前', () => {
+  const { audio, ctx } = setup({ hold: true });
+  audio.start();
+  const g = ctx().master().gain;
+  ctx().currentTime = 1.5;
+  audio.hush(true);
+  const names = g.events.map((e) => e.name);
+  const hold = names.lastIndexOf('cancelAndHoldAtTime');
+  assert.ok(hold >= 0);
+  assert.ok(!names.slice(hold).includes('cancelScheduledValues'));
+  assert.equal(names[hold + 1], 'setTargetAtTime');
+});
+
+test('stop() 先淡出 master，延遲後才 stop oscillator 並關閉 context（一次）', () => {
+  const { audio, timers, ctx } = setup();
+  audio.start();
+  const c = ctx();
+  const oscs = c.nodes.filter((n) => n.kind === 'oscillator');
+  audio.stop();
+  const g = c.master().gain;
+  assert.equal(g.events.at(-1).name, 'setTargetAtTime');
+  assert.equal(g.events.at(-1).v, 0);
+  assert.ok(oscs.every((o) => o.stopCalls === 0));
+  assert.equal(c.closeCalls || 0, 0);
+  timers.advance(MUTE_FADE_SEC * 1000 + 500);
+  assert.ok(oscs.every((o) => o.stopCalls === 1));
+  assert.equal(c.closeCalls, 1);
+  timers.advance(60000);
+  assert.equal(c.closeCalls, 1);
+  assert.ok(oscs.every((o) => o.stopCalls === 1));
+});
+
+test('stop() 之後 start() 會建立新的 context；舊的仍照常收尾', () => {
+  const { audio, timers, created } = setup();
+  audio.start();
+  audio.stop();
+  audio.start();
+  assert.equal(created.length, 2);
+  assert.equal(created[1].count('convolver'), 1);
+  timers.advance(MUTE_FADE_SEC * 1000 + 500);
+  assert.equal(created[0].closeCalls, 1);
+  assert.equal(created[1].closeCalls || 0, 0);
+  assert.ok(created[1].nodes.filter((n) => n.kind === 'oscillator').every((o) => o.stopCalls === 0));
+});
+
+test('換和弦的目標頻率等於下一個和弦各音的 midiToFreq', () => {
+  const { audio, timers, ctx } = setup();
+  audio.start();
+  const oscs = ctx().nodes.filter((n) => n.kind === 'oscillator');
+  timers.advance(CHORD_SEC * 1000 + 10);
+  const next = chordAt(1);
+  const targets = oscs.flatMap((o) => o.frequency.targets.filter((_, i) => o.frequency.calls[i] === 'setTargetAtTime'));
+  assert.ok(targets.includes(midiToFreq(next.bass)));
+  assert.ok(targets.includes(midiToFreq(next.bass + 12)));
+  for (const v of next.voices) assert.ok(targets.includes(midiToFreq(v)));
+});
+
+test('鐘聲：有短 attack、oscillator 會 stop，onended 後斷線', () => {
+  const { audio, ctx } = setup();
+  audio.start();
+  const before = ctx().nodes.length;
+  audio.bell();
+  const added = ctx().nodes.slice(before);
+  const oscs = added.filter((n) => n.kind === 'oscillator');
+  const gains = added.filter((n) => n.kind === 'gain');
+  assert.ok(oscs.length > 0 && gains.length === oscs.length);
+  for (const g of gains) {
+    const names = g.gain.events.map((e) => e.name);
+    assert.deepEqual(names, ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime']);
+    const ramp = g.gain.events[1];
+    assert.ok(ramp.t > g.gain.events[0].t && ramp.t - g.gain.events[0].t <= 0.02);
+  }
+  for (const o of oscs) {
+    assert.equal(o.started, true);
+    assert.equal(o.stopCalls, 1);
+    assert.equal(typeof o.onended, 'function');
+    o.onended();
+    assert.equal(o.disconnected, 1);
+  }
+  assert.ok(gains.every((g) => g.disconnected === 1));
+});
+
+test('鐘聲最小間隔：1.5 秒內重複呼叫被忽略', () => {
+  const { audio, ctx } = setup();
+  audio.start();
+  audio.bell();
+  const n = ctx().count('oscillator');
+  ctx().currentTime = 1;
+  audio.bell();
+  assert.equal(ctx().count('oscillator'), n);
+  ctx().currentTime = 1.6;
+  audio.bell();
+  assert.ok(ctx().count('oscillator') > n);
+});
+
+test('resume() 被拒絕時不會一直排程換和弦，之後 start() 可重試', async () => {
+  const { audio, timers, created } = setup({ rejectResume: true });
+  audio.start();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(timers.size, 0);
+  assert.equal(created[0].closeCalls, 1);
+  assert.doesNotThrow(() => audio.bell());
+  audio.start();
+  assert.equal(created.length, 2);
+});
+
+test('context 已關閉時，換和弦計時器不再重排', () => {
+  const { audio, timers, ctx } = setup();
+  audio.start();
+  ctx().close();
+  timers.advance(CHORD_SEC * 1000 + 10);
+  assert.equal(timers.size, 0);
 });

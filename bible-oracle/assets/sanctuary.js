@@ -10,11 +10,15 @@ export function splitGraphemes(text) {
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
 
-/** 經文逐字浮現的排程：每字一個延遲秒數，總長被壓在 maxTotal 以內。 */
+/**
+ * 經文逐字浮現的排程：每字一個延遲秒數。
+ * 保證：total（最後一字延遲 + 0.6 淡入）不超過 maxTotal；但 maxTotal 小到容納不下時，
+ * 間隔以 0.005 秒為下限（維持嚴格遞增），此時 total 會略超過 maxTotal。
+ */
 export function revealSchedule(text, { startDelay = 0.2, perChar = 0.06, maxTotal = 4.5 } = {}) {
   const chars = splitGraphemes(text);
   if (chars.length === 0) return { chars, delays: [], total: 0 };
-  const step = Math.min(perChar, (maxTotal - startDelay) / chars.length);
+  const step = Math.max(0.005, Math.min(perChar, (maxTotal - startDelay - 0.6) / chars.length));
   const delays = chars.map((_, i) => round3(startDelay + i * step));
   return { chars, delays, total: round3(delays[delays.length - 1] + 0.6) };
 }
