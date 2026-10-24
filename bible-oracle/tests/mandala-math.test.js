@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   mulberry32, clamp, mat4Identity, mat4Perspective, mat4LookAt, mat4Multiply,
   mat4TransformPoint, orbitEye, ORBIT_DEFAULTS, createOrbit, stepOrbit, projectToScreen,
+  sceneChanged, throttleSkip, THROTTLE_FPS,
 } from '../assets/mandala-math.js';
 
 const near = (a, b, eps = 1e-5) => assert.ok(Math.abs(a - b) <= eps, `${a} !~ ${b}`);
@@ -180,4 +181,24 @@ test('projectToScreen: point above is higher on screen; behind camera invisible'
   assert.ok(projectToScreen(vp, [0, 3, 0], 100, 100).y < 50);
   assert.equal(projectToScreen(vp, [0, 0, 40], 100, 100).visible, false);
   assert.equal(projectToScreen(vp, [500, 0, 0], 100, 100).visible, false);
+});
+
+// ---- 渲染排程：靜止時略過、對話框開啟時節流 ----
+
+test('sceneChanged：數值陣列任一項變動才算變動；長度不同或無前值視為變動', () => {
+  assert.equal(sceneChanged(null, [1, 2]), true);
+  assert.equal(sceneChanged([1, 2], [1, 2]), false);
+  assert.equal(sceneChanged([1, 2], [1, 2.001]), true);
+  assert.equal(sceneChanged([1, 2], [1, 2 + 1e-9]), false);
+  assert.equal(sceneChanged([1], [1, 2]), true);
+});
+
+test('throttleSkip：未節流永不略過；節流時距上次渲染不足間隔就略過，且容許 raf 抖動', () => {
+  assert.equal(throttleSkip(100, 90, 0), false);
+  assert.equal(throttleSkip(10, -1, 1000 / THROTTLE_FPS), false);
+  const iv = 1000 / THROTTLE_FPS;
+  assert.equal(throttleSkip(110, 100, iv), true);
+  assert.equal(throttleSkip(100 + iv, 100, iv), false);
+  assert.equal(throttleSkip(100 + iv - 3, 100, iv), false, '差 3ms 以內（raf 抖動）視為到點');
+  assert.equal(THROTTLE_FPS, 24);
 });

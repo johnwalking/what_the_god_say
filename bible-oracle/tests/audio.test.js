@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUTE_FADE_SEC, midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC, HUSH_LEVEL, TOLL_MIN_SEC, TOLL_MAX_SEC, TOLL_LEVEL, BELL_LEVEL } from '../assets/audio.js';
+import { MUTE_FADE_SEC, midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC, HUSH_LEVEL, TOLL_MIN_SEC, TOLL_MAX_SEC, TOLL_LEVEL, BELL_LEVEL, FADE_IN_SEC } from '../assets/audio.js';
 
 test('midiToFreq', () => {
   assert.equal(midiToFreq(69), 440);
@@ -478,4 +478,20 @@ test('context 已關閉時，換和弦計時器不再重排', () => {
   ctx().close();
   timers.advance(CHORD_SEC * 1000 + 100000);
   assert.equal(timers.size, 0);
+});
+
+test('context 尚未 running 時 hush/setMuted 不取消長淡入：改排 linearRamp 到 FADE_IN_SEC 後的目標位準', () => {
+  const { audio, ctx } = setup({ pending: true });
+  audio.start();
+  const g = ctx().master().gain;
+  assert.equal(ctx().state, 'suspended');
+  audio.hush(true);
+  audio.hush(false);
+  const ramps = g.events.filter((e) => e.name === 'linearRampToValueAtTime');
+  const last = ramps.at(-1);
+  assert.equal(last.v, MASTER_LEVEL);
+  assert.equal(last.t, FADE_IN_SEC);
+  assert.ok(!g.events.some((e, i) => i > 2 && e.name === 'setTargetAtTime'), 'suspended 時不用快速的 setTargetAtTime');
+  audio.setMuted(true);
+  assert.equal(g.events.filter((e) => e.name === 'linearRampToValueAtTime').at(-1).v, 0);
 });

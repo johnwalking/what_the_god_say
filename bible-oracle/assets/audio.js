@@ -174,6 +174,12 @@ export function createAudio({
       p.cancelScheduledValues(now);
       p.setValueAtTime(p.value, now);
     }
+    if (ctx.state !== 'running') {
+      // 時間軸沒在走（currentTime 停在 0）：快速的 setTargetAtTime 會讓音樂在 resume 後瞬間滿音量，
+      // 改成沿用長淡入的斜坡到新位準
+      p.linearRampToValueAtTime(target, now + FADE_IN_SEC);
+      return;
+    }
     p.setTargetAtTime(target, now, MUTE_FADE_SEC / 4);
   }
 

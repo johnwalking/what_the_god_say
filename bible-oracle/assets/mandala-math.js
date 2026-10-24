@@ -165,3 +165,20 @@ export function projectToScreen(viewProj, point, width, height, out = { x: 0, y:
   out.visible = w > 0 && Math.abs(nx) <= VISIBLE_NDC_LIMIT && Math.abs(ny) <= VISIBLE_NDC_LIMIT;
   return out;
 }
+
+// ---- 渲染排程 ----
+export const THROTTLE_FPS = 24;      // 對話框開啟時的渲染幀率上限
+const THROTTLE_SLACK_MS = 4;         // raf 抖動容許量：差這麼多以內視為到點
+const CHANGE_EPS = 1e-6;
+
+// 前後兩次的場景簽章（數值陣列）是否不同；用於靜止（暫停／減少動態）時判斷要不要重畫
+export function sceneChanged(prev, cur) {
+  if (!prev || prev.length !== cur.length) return true;
+  for (let i = 0; i < cur.length; i++) if (Math.abs(prev[i] - cur[i]) > CHANGE_EPS) return true;
+  return false;
+}
+
+// 節流：距上次渲染不足間隔就略過這一幀（intervalMs <= 0 代表不節流；lastRender < 0 代表還沒畫過）
+export function throttleSkip(now, lastRender, intervalMs) {
+  return intervalMs > 0 && lastRender >= 0 && now - lastRender < intervalMs - THROTTLE_SLACK_MS;
+}

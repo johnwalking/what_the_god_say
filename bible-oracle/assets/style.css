@@ -196,7 +196,6 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
 }
 .scene:active { cursor: grabbing; }
 .scene.dim { opacity: var(--scene-dim); } /* 對話框開啟時略降場景亮度 */
-.dust { z-index: 1; }
 
 /* 透明按鈕，位置與大小由 sanctuary.js 依十字架計算（WebGL：--cx/--cy/--cw/--ch；2D 後備：--cross-*） */
 .cross {
@@ -378,7 +377,6 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   text-align: center;
   color: var(--faded);
   font-size: 0.78rem;
-  opacity: 0.55;
 }
 .colophon p { margin: 0; }
 
@@ -456,7 +454,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 }
 .dialog-head {
   display: grid;
-  grid-template-columns: 2.6rem 1fr 2.6rem;
+  grid-template-columns: 2.75rem 1fr 2.75rem;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1.6rem;
@@ -483,8 +481,8 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .close {
   grid-column: 3;
   flex: none;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.75rem; /* ≥ 44px 觸控目標 */
+  height: 2.75rem;
   padding: 0;
   border-radius: 50%;
   border-color: rgba(var(--gold-rgb), 0.4);
@@ -501,6 +499,24 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .ask-dialog button:not(.close):hover, .ask-dialog button:not(.close):focus-visible {
   background: rgba(var(--gold-rgb), 0.1);
   box-shadow: inset 0 0 0 3px rgba(8, 6, 5, 0), inset 0 0 0 4px rgba(var(--gold-rgb), 0.3), 0 0 1.2rem rgba(138, 104, 40, 0.45);
+}
+
+/* 重開對話框、或揭曉已播完：直接呈現最終狀態，不重播動畫（sanctuary.js 的 settle()） */
+.settled, .settled .ch { animation: none !important; }
+.verse.settled::before, .verse.settled::after { display: none; }
+
+/* ---- 沒有 JavaScript ---- */
+.noscript {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 45%;
+  z-index: 4;
+  margin: 0;
+  padding: 0 1.5rem;
+  text-align: center;
+  color: var(--text);
+  letter-spacing: 0.1em;
 }
 
 /* ---- 揭曉：字從金光中緩緩浮起成形；出處輕輕淡入；「屬靈解讀」最後、最慢、最暗 ----
@@ -566,8 +582,8 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   top: 0.9rem;
   right: 0.9rem;
   z-index: 5;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.75rem; /* ≥ 44px 觸控目標 */
+  height: 2.75rem;
   padding: 0;
   border-radius: 50%;
   font-size: 1.1rem;
@@ -589,7 +605,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   width: max-content;
   max-width: 90vw;
   text-align: center;
-  color: #7f705b;
+  color: #9a8a72; /* 對比 ≥ 4.5:1 */
   font-size: 0.8rem;
   letter-spacing: 0.25em;
   text-shadow: 0 1px 3px #000;
@@ -598,24 +614,6 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   transition: opacity 1.5s ease;
 }
 .hint[hidden] { display: none; }
-.hint.fade { opacity: 0; }
-
-/* ---- 靜音鍵 ---- */
-.mute {
-  position: fixed;
-  top: 0.9rem;
-  right: 0.9rem;
-  z-index: 5;
-  width: 2.6rem;
-  height: 2.6rem;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 1.1rem;
-  letter-spacing: 0;
-  line-height: 1;
-}
-.mute[hidden] { display: none; }
-.mute[aria-pressed="true"] { color: var(--faded); border-color: rgba(var(--gold-rgb), 0.3); text-decoration: line-through; }
 
 .visually-hidden {
   position: absolute; width: 1px; height: 1px;

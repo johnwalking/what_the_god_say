@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitGraphemes, revealSchedule, quipDelay, charJitter, ceremonyFor, worshipState, discipleRings, projectDisciple, clampPitch, clampZoom, sceneSpeed, createSanctuary } from '../assets/sanctuary.js';
+import { splitGraphemes, revealSchedule, quipDelay, charJitter, ceremonyFor, worshipState, discipleRings, projectDisciple, clampPitch, clampZoom, sceneSpeed, createSanctuary, pruneStalePointers } from '../assets/sanctuary.js';
 
 test('splitGraphemes 依碼點拆分且容忍空值', () => {
   assert.deepEqual(splitGraphemes('主的旨意'), ['主', '的', '旨', '意']);
@@ -350,4 +350,40 @@ test('晚於 mountScene 的 setWorship 之前已設的狀態會在掛載時帶�
   s.setWorship('crisis');
   s.mountScene();
   assert.deepEqual(calls.filter((c) => c.startsWith('state:')), ['state:still']);
+});
+
+// ---- 審查修正 ----
+test('pruneStalePointers：只丟掉已失去 capture 的殘留指標，仍持有 capture 或從未 capture 的保留', () => {
+  const held = new Set([2]);
+  const el = { hasPointerCapture: (id) => held.has(id) };
+  const pointers = new Map([
+    [1, { x: 0, y: 0, el, cap: true }],   // 殘留（capture 已丟）
+    [2, { x: 0, y: 0, el, cap: true }],   // 正常
+    [3, { x: 0, y: 0, el, cap: false }],  // 從未 capture 成功：無法判斷，保留
+  ]);
+  assert.equal(pruneStalePointers(pointers), 1);
+  assert.deepEqual([...pointers.keys()], [2, 3]);
+  assert.equal(pruneStalePointers(new Map([[1, { cap: true, el: {} }]])), 0, '沒有 hasPointerCapture 的環境不亂丟');
+});
+
+test('reveal 完成後 settle()：加上 settled、拿掉 inscribing；再次 reveal 會清掉 settled', () => {
+  const { s, verseEl, refEl, quipEl } = revealRig();
+  s.reveal({ verseEl, refEl, quipEl, text: '甲乙丙丁戊', kind: 'oracle' });
+  assert.ok(verseEl.classList.contains('inscribing') && !verseEl.classList.contains('settled'));
+  s.settle();
+  for (const el of [verseEl, refEl, quipEl]) assert.ok(el.classList.contains('settled'));
+  assert.ok(!verseEl.classList.contains('inscribing'));
+  s.reveal({ verseEl, refEl, quipEl, text: '天地', kind: 'oracle' });
+  for (const el of [verseEl, refEl, quipEl]) assert.ok(!el.classList.contains('settled'));
+  s.calm(); // 清掉計時器，讓測試能結束
+});
+
+test('calm() 會把 2D 後備的閃光餘暉歸零', () => {
+  const { s } = mandalaRig({ result: 'null' });
+  s.mountScene();
+  const base = s.getSceneState().glow;
+  s.pulse();
+  assert.ok(s.getSceneState().glow > base + 0.5, '閃光有抬高光暈');
+  s.calm();
+  assert.ok(Math.abs(s.getSceneState().glow - base) < 1e-9, 'calm 後閃光餘暉歸零');
 });

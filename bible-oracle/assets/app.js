@@ -70,6 +70,8 @@ const sanctuary = createSanctuary({
 });
 const audio = createAudio({ storage: 取儲存() });
 
+/** 資料一開始就載入；使用者在載入完成前提問、且 API 又失敗時，靜態路徑要等它。 */
+const dataReady = loadData();
 let data = null;
 let 目前的問題 = '';
 let 目前的位移 = 0;
@@ -81,6 +83,8 @@ const API_N_MAX = 1000;
 
 const API_TIMEOUT_MS = 8000;
 let 請求序號 = 0;
+let 請求中 = false; // 目前畫面上的「求問中⋯」是否還在等回應
+let 危機中 = false; // 畫面上正顯示關懷訊息：關閉再開啟對話框時，門徒仍靜止、光暈不升
 
 /** 呼叫後端；逾時、網路錯誤或非 2xx 一律拋錯，由呼叫端退回靜態比對。 */
 async function fetchOracle(question, n) {
@@ -149,11 +153,15 @@ function render(result, question) {
 
 /** 危機訊息：只留關懷文字，儀式全停、配樂收到近乎無聲。 */
 function showCare(message) {
+  危機中 = true;
+  請求中 = false;
   sanctuary.setBusy(false);
   sanctuary.calm();
   sanctuary.setWorship('crisis');
   audio.hush(true);
   showNotice(message);
+  // dialog 不是 inert 區域，live region 剛解除 hidden 就填字常不被播報：把焦點交給 #notice
+  if (el.dialog.open) el.notice.focus();
 }
 
 /** 控制字元不該出現在網址參數裡，一律濾掉。 */
@@ -188,9 +196,11 @@ async function ask(question, n) {
     return;
   }
   // 此時還不知道後端會不會判定為危機，儀式（閃光、配樂回升）等結果出來再開始
+  危機中 = false;
   sanctuary.setBusy(true);
   sanctuary.setWorship('ask');
   showNotice('求問中⋯');
+  請求中 = true;
 
   try {
     let result;
@@ -212,13 +222,24 @@ async function ask(question, n) {
     } catch (error) {
       console.warn('API 無法使用，改用靜態比對：', error);
       if (序號 !== 請求序號) return;
+      data ??= await dataReady; // 資料還沒載完就先等，否則 answer() 會拿到 null
+      if (序號 !== 請求序號) return;
       result = answer(question, data, n);
       目前的池大小 = result.poolSize;
     }
 
+    // 縱深防禦：任何來源的危機結果都先走關懷路徑，不得觸發閃光或配樂回升
+    if (result.kind === 'crisis') {
+      目前的答案 = null;
+      writeURL(question, n);
+      showCare(CARE_MESSAGE);
+      return;
+    }
     目前的答案 = result;
     writeURL(question, n);
     sanctuary.setBusy(false);
+    危機中 = false;
+    請求中 = false;
     audio.hush(false);
     sanctuary.pulse();
     render(result, question);
@@ -227,6 +248,7 @@ async function ask(question, n) {
     if (序號 === 請求序號) {
       sanctuary.setBusy(false);
       showNotice('出了點問題，請再試一次。');
+      請求中 = false;
     }
   }
 }
@@ -252,7 +274,8 @@ function hideCrossHint() {
 
 function openDialog() {
   if (!el.dialog.open) el.dialog.showModal();
-  sanctuary.setWorship('ask');
+  sanctuary.setWorship(危機中 ? 'crisis' : 'ask');
+  if (!el.answer.hidden) sanctuary.settle(); // 重開時已有答案：直接呈現完成的樣子，不重播 8 秒浮現
   hideCrossHint();
   if (el.answer.hidden) el.input.focus(); // 已有答案時維持焦點不動
 }
@@ -272,7 +295,14 @@ el.close.addEventListener('click', closeDialog);
 el.dialog.addEventListener('close', () => {
   ++請求序號; // 作廢還在路上的請求，避免對話框關著卻開始儀式
   sanctuary.setBusy(false);
-  sanctuary.setWorship('reset');
+  if (請求中) {
+    // 回應會被丟掉，「求問中⋯」不能卡在畫面上；之前的危機收音也一併解除
+    請求中 = false;
+    el.notice.hidden = true;
+    el.notice.textContent = '';
+    audio.hush(false);
+  }
+  sanctuary.setWorship(危機中 ? 'crisis' : 'reset'); // 關懷訊息還在，門徒就繼續靜止
   el.cross.focus();
 });
 
@@ -318,32 +348,43 @@ el.mute.addEventListener('click', () => {
   // 取消靜音是使用者手勢；start() 冪等，也能在先前被擋住後重試
   if (!muted) audio.start();
   syncMute();
+  syncMusicHint();
 });
 
-/** 音樂：載入即嘗試；被瀏覽器擋下就提示，並在第一次互動時啟動。 */
-const 互動事件 = ['pointerdown', 'keydown', 'touchstart', 'click'];
+/**
+ * 音樂：載入即嘗試；被瀏覽器擋下就提示，並在使用者「啟用手勢」時啟動。
+ * pointerdown／touchstart 在觸控裝置上不算啟用手勢，所以聽 pointerup／touchend。
+ * 只要狀態不是 running（含 context 之後又被暫停）就重新掛上，running 時卸下。
+ */
+const 互動事件 = ['pointerup', 'touchend', 'keydown', 'click'];
+let 已掛互動 = false;
 function 啟動音樂() {
   audio.start();
 }
+function 掛互動(on) {
+  if (on === 已掛互動) return;
+  已掛互動 = on;
+  for (const type of 互動事件) {
+    if (on) window.addEventListener(type, 啟動音樂, { capture: true });
+    else window.removeEventListener(type, 啟動音樂, true);
+  }
+}
 function syncMusicHint() {
   const running = audio.state() === 'running';
-  el.hint.hidden = running || audio.available === false;
-  if (running) for (const type of 互動事件) window.removeEventListener(type, 啟動音樂, true);
+  const unavailable = audio.available === false;
+  el.hint.hidden = running || unavailable || audio.isMuted();
+  掛互動(!running && !unavailable);
 }
 audio.onStateChange(syncMusicHint);
 audio.start();
 syncMute();
 syncMusicHint();
-if (audio.state() !== 'running' && audio.available !== false) {
-  for (const type of 互動事件) window.addEventListener(type, 啟動音樂, { capture: true });
-}
 
-window.__sanctuaryReady = true;
 sanctuary.mountScene();
 sanctuary.startDust();
 sanctuary.setWorship('load');
 
-data = await loadData();
+data = await dataReady;
 
 const 來自網址 = readURL();
 if (來自網址.question) {

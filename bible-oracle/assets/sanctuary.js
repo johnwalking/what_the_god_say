@@ -34,10 +34,27 @@ const GL_WHEEL_ZOOM = 0.0012; // 滾輪縮放靈敏度（相機距離的指數�
 const GL_HIT_W_MOBILE = 72; // 手機（<600px）十字架按鈕最小寬（px）
 const GL_PORTRAIT_BIAS = 0.5; // 直向畫面把曼陀羅整體上移的程度（傳給 createMandala 的 portraitBias）
 const GL_HINT_GAP = 24; // 「點擊這裡」與十字架頂端的距離（px）
+const GL_HINT_MAST_GAP = 8; // 「點擊這裡」頂端與標題區底部至少相隔（px）
 
 /** 逐碼點拆字，讓罕用字（surrogate pair）不會被切成兩半。 */
 export function splitGraphemes(text) {
   return Array.from(String(text ?? ''));
+}
+
+/**
+ * 指標健檢：丟掉「已失去 capture」的殘留指標（touchend／pointerup 漏接時，
+ * 它們會讓 pointers.size 永遠 > 0，十字架就再也點不開）。回傳丟掉幾個。
+ * 條目形如 { x, y, el, cap }；cap 為 true 才有資格被判定為殘留。
+ */
+export function pruneStalePointers(pointers) {
+  let dropped = 0;
+  for (const [id, p] of [...pointers]) {
+    if (p.cap && typeof p.el?.hasPointerCapture === 'function' && !p.el.hasPointerCapture(id)) {
+      pointers.delete(id);
+      dropped += 1;
+    }
+  }
+  return dropped;
 }
 
 const round3 = (n) => Math.round(n * 1000) / 1000;
@@ -50,6 +67,7 @@ const REVEAL_MAX_TOTAL = 8; // 整段經文浮現完成的上限（秒）
 const CH_RISE_MIN = 1.5; // 單字從金光中浮出的最短時長（秒）
 const CH_RISE_MAX = 2.0; // 單字浮出的最長時長（秒；也是排程的 fade）
 const QUIP_GAP = 2; // 經文完成後，「屬靈解讀」再等幾秒（喜劇停頓）
+const QUIP_FADE_SEC = 3; // 與 style.css 的 --quip-fade 對齊：解讀淡入完才算整段塵埃落定
 
 /** 確定性的偽亂數（0 ≤ x < 1），只依整數 i；用來替每個字加一點不規則。 */
 export function charJitter(i) {
@@ -346,6 +364,8 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
   let dustTimer = null; // requestAnimationFrame id
   let dustCleanup = null;
   let pulseTimer = null;
+  let settleTimer = null;
+  let revealEls = [];
 
   // ---- 場景：優先 WebGL2 曼陀羅，失敗退回 Canvas 2D 偽 3D ----
   const sceneApi = { cleanup: null, view: null, mandala: null, backend: null };
@@ -395,6 +415,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
 
     // ---- DOM 對位 ----
     const last = { x: NaN, y: NaN, w: NaN, h: NaN };
+    let hintMin = null; // 提示 --hy 的下限（含自身高度），resize 時重算
     function align(info) {
       const c = info?.cross;
       if (!c || !crossBtn?.style) return;
@@ -409,7 +430,12 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
       const set = (el, k, v) => el?.style?.setProperty(k, `${v.toFixed(1)}px`);
       set(crossBtn, '--cx', cx); set(crossBtn, '--cy', cy);
       set(crossBtn, '--cw', wPx); set(crossBtn, '--ch', hPx);
-      set(hintEl, '--hx', cx); set(hintEl, '--hy', topY - GL_HINT_GAP);
+      // 十字架靠近畫面頂端時，提示的頂端不得壓到標題區（寧可往下壓近十字架）
+      if (hintMin === null) {
+        const mastBottom = doc?.querySelector?.('.masthead')?.getBoundingClientRect?.().bottom ?? 0;
+        hintMin = mastBottom + GL_HINT_MAST_GAP + (hintEl?.offsetHeight || 56);
+      }
+      set(hintEl, '--hx', cx); set(hintEl, '--hy', Math.max(topY - GL_HINT_GAP, hintMin));
     }
 
     // ---- 互動 ----
@@ -418,7 +444,10 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     let moved = 0;
     let suppressClick = false;
     const onDown = (e) => {
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (e.pointerType === 'mouse' && e.button !== 0) return; // 右鍵／中鍵不拖曳
+      pruneStalePointers(pointers);
+      const entry = { x: e.clientX, y: e.clientY, el: e.currentTarget, cap: false };
+      pointers.set(e.pointerId, entry);
       suppressClick = false;
       if (pointers.size === 1) { moved = 0; m.setHeld(true); }
       else if (pointers.size === 2) {
@@ -426,13 +455,13 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
         suppressClick = true;
       }
-      try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 略 */ }
+      try { e.currentTarget.setPointerCapture?.(e.pointerId); entry.cap = true; } catch { /* 略 */ }
     };
     const onMove = (e) => {
-      const prev = pointers.get(e.pointerId);
-      if (!prev) return;
-      const cur = { x: e.clientX, y: e.clientY };
-      pointers.set(e.pointerId, cur);
+      const cur = pointers.get(e.pointerId);
+      if (!cur) return;
+      const prev = { x: cur.x, y: cur.y };
+      cur.x = e.clientX; cur.y = e.clientY;
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -476,13 +505,14 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     const guardClick = (e) => {
       if (suppressClick) { e.preventDefault(); e.stopImmediatePropagation(); }
     };
-    const onResize = () => m.resize();
+    const onResize = () => { hintMin = null; last.x = NaN; m.resize(); };
     const targets = [canvas, crossBtn].filter(Boolean);
     for (const el of targets) {
       el.addEventListener?.('pointerdown', onDown);
       el.addEventListener?.('pointermove', onMove);
       el.addEventListener?.('pointerup', onUp);
       el.addEventListener?.('pointercancel', onUp);
+      el.addEventListener?.('lostpointercapture', onUp);
     }
     crossBtn?.addEventListener?.('click', guardClick, true);
     win.addEventListener?.('wheel', onWheel, { passive: false });
@@ -491,7 +521,11 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
 
     // 對話框開啟時略降場景亮度（CSS opacity 轉場）
     let observer = null;
-    const syncDim = () => canvas.classList?.toggle('dim', Boolean(dialogEl?.hasAttribute?.('open')));
+    const syncDim = () => {
+      const open = Boolean(dialogEl?.hasAttribute?.('open'));
+      canvas.classList?.toggle('dim', open);
+      m.setThrottle?.(open); // 對話框開著時場景只是壓暗的背景，降到約 24fps
+    };
     if (dialogEl && typeof MutationObserver !== 'undefined') {
       observer = new MutationObserver(syncDim);
       observer.observe(dialogEl, { attributes: true, attributeFilter: ['open'] });
@@ -504,6 +538,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         el.removeEventListener?.('pointermove', onMove);
         el.removeEventListener?.('pointerup', onUp);
         el.removeEventListener?.('pointercancel', onUp);
+        el.removeEventListener?.('lostpointercapture', onUp);
       }
       crossBtn?.removeEventListener?.('click', guardClick, true);
       win.removeEventListener?.('wheel', onWheel);
@@ -514,6 +549,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         for (const k of keys) el?.style?.removeProperty?.(k); // 退回 2D 時改由 --cross-* 定位
       }
       canvas.classList?.remove('dim');
+      m.setThrottle?.(false);
       try { m.destroy(); } catch { /* 略 */ }
       sceneApi.mandala = null;
       sceneApi.backend = null;
@@ -631,7 +667,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         view.t += dt * view.speed;
         // 自動環繞：閒置 IDLE_DELAY_SEC 後平順恢復
         view.idleFor += dt;
-        const wantAuto = view.idleFor > IDLE_DELAY_SEC && !view.dragging ? 1 : 0;
+        const wantAuto = view.idleFor > IDLE_DELAY_SEC && !view.dragging && view.state !== 'still' ? 1 : 0; // 危機：不自動環繞
         view.autoRamp += (wantAuto - view.autoRamp) * Math.min(1, dt * AUTO_EASE);
         view.yaw += AUTO_YAW_SPEED * view.autoRamp * Math.min(1, view.speed) * dt;
         // 放開後的慣性
@@ -672,7 +708,10 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     const touch = () => { view.idleFor = 0; view.dirty = true; };
 
     const onDown = (e) => {
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (e.pointerType === 'mouse' && e.button !== 0) return; // 右鍵／中鍵不拖曳
+      pruneStalePointers(pointers);
+      const entry = { x: e.clientX, y: e.clientY, el: e.currentTarget, cap: false };
+      pointers.set(e.pointerId, entry);
       suppressClick = false;
       if (pointers.size === 1) { moved = 0; view.dragging = true; view.vyaw = 0; }
       else if (pointers.size === 2) {
@@ -680,14 +719,14 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
         suppressClick = true;
       }
-      try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 略 */ }
+      try { e.currentTarget.setPointerCapture?.(e.pointerId); entry.cap = true; } catch { /* 略 */ }
       touch();
     };
     const onMove = (e) => {
-      const prev = pointers.get(e.pointerId);
-      if (!prev) return;
-      const cur = { x: e.clientX, y: e.clientY };
-      pointers.set(e.pointerId, cur);
+      const cur = pointers.get(e.pointerId);
+      if (!cur) return;
+      const prev = { x: cur.x, y: cur.y };
+      cur.x = e.clientX; cur.y = e.clientY;
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -748,6 +787,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
       el.addEventListener('pointermove', onMove);
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onUp);
+      el.addEventListener('lostpointercapture', onUp);
     }
     crossBtn?.addEventListener('click', guardClick, true);
     crossBtn?.addEventListener('pointerenter', hoverOn);
@@ -769,6 +809,7 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);
         el.removeEventListener('pointercancel', onUp);
+        el.removeEventListener('lostpointercapture', onUp);
       }
       crossBtn?.removeEventListener('click', guardClick, true);
       crossBtn?.removeEventListener('pointerenter', hoverOn);
@@ -909,6 +950,9 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
     const plan = ceremonyFor(kind);
     const verse = String(text ?? '');
     const late = [refEl, quipEl];
+    clearTimeout(settleTimer);
+    revealEls = [verseEl, refEl, quipEl].filter(Boolean);
+    for (const el of revealEls) el.classList?.remove('settled');
     for (const el of late) el?.classList.remove('reveal-late');
     verseEl?.classList?.remove('inscribing');
     if (!plan.animate || reduced) {
@@ -946,21 +990,35 @@ export function createSanctuary({ root = document, reducedMotion, createMandalaF
       el.style.setProperty('--d', `${lateAt[i]}s`);
       restartClass(el, 'reveal-late');
     });
+    settleTimer = setTimeout(settle, (lateAt[1] + QUIP_FADE_SEC + 0.3) * 1000);
     return { total };
+  }
+
+  /** 揭曉已完成（或重開對話框時已有答案）：直接呈現最終狀態，不再重播動畫。 */
+  function settle() {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+    for (const el of revealEls) {
+      el.classList?.remove('inscribing');
+      el.classList?.add('settled');
+    }
   }
 
   function calm() {
     clearTimeout(pulseTimer);
     pulseTimer = null;
+    clearTimeout(settleTimer);
+    settleTimer = null;
     $('beams')?.classList.remove('pulse');
     doc?.body?.classList.remove('pulsing');
     setWorship('crisis');
     $('notice')?.classList.remove('busy');
+    if (sceneApi.view) sceneApi.view.kick = 0; // 2D 後備的閃光餘暉也歸零
     for (const el of root.querySelectorAll?.('.reveal-late, .ch, .inscribing') ?? []) {
       el.classList.remove('reveal-late', 'inscribing');
       if (el.classList.contains('ch')) el.classList.remove('ch');
     }
   }
 
-  return { mountScene, unmountScene, getSceneState, getSceneBackend, getCrossRect, setWorship, startDust, stopDust, pulse, setBusy, reveal, calm };
+  return { mountScene, unmountScene, getSceneState, getSceneBackend, getCrossRect, setWorship, startDust, stopDust, pulse, setBusy, reveal, settle, calm };
 }

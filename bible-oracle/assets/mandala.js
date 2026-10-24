@@ -4,7 +4,7 @@
 // 零依賴；import 時不存取 window／document；熱路徑重用預先配置的陣列。
 import {
   clamp, mulberry32, mat4Perspective, mat4LookAt, mat4Multiply, mat4TransformPoint,
-  orbitEye, createOrbit, stepOrbit, ORBIT_DEFAULTS,
+  orbitEye, createOrbit, stepOrbit, ORBIT_DEFAULTS, sceneChanged, throttleSkip, THROTTLE_FPS,
 } from './mandala-math.js';
 import { Builder, PART, HIP, NECK, buildCross, planRings, buildRingGeometry } from './mandala-shapes.js';
 
@@ -592,6 +592,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
     return t;
   };
   let W = 0, H = 0, dpr = 1, cssW = 0, cssH = 0;
+  let forced = true; // 下一幀一定要畫（初次、resize 清空畫布、重新可見）
   function buildTargets() {
     freeTargets();
     texColor = makeTex(W, H, gl.RGBA8);
@@ -620,6 +621,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
     W = w; H = h;
     canvas.width = W; canvas.height = H;
     buildTargets();
+    forced = true;
   }
   try {
     resize();
@@ -638,6 +640,8 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
   let target = STATES.idle;
   let sceneSpeed = target.speed, glow = target.glow, bowBlend = 0, raiseBlend = 0, breath = target.breath, pulseAmt = 0;
   let time = 0, frames = 0, lastT = -1, rafId = 0, running = false, dead = false, frameMs = 0;
+  let prevSig = null, lastRenderT = -1, throttleMs = 0; // 渲染排程：簽章未變就不重畫；節流間隔（0 = 不節流）
+  const sig = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
   const eye = [0, 0, 0], up = [0, 1, 0];
   const view = new Float32Array(16), proj = new Float32Array(16), viewProj = new Float32Array(16);
@@ -660,6 +664,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
   function update(dt) {
     input.dragDAz = pendAz; input.dragDEl = pendEl; input.zoomFactor = pendZoom;
     input.held = held; input.paused = paused;
+    input.autoOrbit = !reducedMotion && stateName !== 'still'; // 危機：鏡頭也靜下來
     pendAz = 0; pendEl = 0; pendZoom = 1;
     orbit = stepOrbit(orbit, dt, input, portraitBias > 0 && W < H ? portraitOrbit : orbitParams);
     if (reducedMotion && !held) { orbit.vAz = 0; orbit.vEl = 0; }
@@ -799,6 +804,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
   function frame(now) {
     rafId = 0;
     if (dead || !running) return;
+    if (throttleSkip(now, lastRenderT, throttleMs)) { rafId = raf(frame); return; }
     const t0 = now;
     const dt = lastT < 0 ? 1 / 60 : clamp((now - lastT) / 1000, 0, MAX_DT);
     lastT = now;
@@ -807,17 +813,25 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
       try { resize(); } catch (e) { die(e.message); return; }
     }
     update(dt);
-    render();
-    frames++;
-    if (onFrame) { try { onFrame(frameInfo); } catch { /* 呼叫端錯誤不中斷渲染 */ } }
-    const perf = win && win.performance;
-    if (perf) frameMs = frameMs * 0.9 + (perf.now() - t0) * 0.1;
+    // 暫停／減少動態且沒有任何變化（輸入、狀態、光暈／姿勢漸變、閃光、resize）時不重畫
+    sig[0] = orbit.az; sig[1] = orbit.el; sig[2] = orbit.dist; sig[3] = glow; sig[4] = bowBlend;
+    sig[5] = raiseBlend; sig[6] = breath; sig[7] = pulseAmt; sig[8] = time;
+    if (!(reducedMotion || paused) || forced || sceneChanged(prevSig, sig)) {
+      prevSig = sig.slice();
+      forced = false;
+      lastRenderT = now;
+      render();
+      frames++;
+      if (onFrame) { try { onFrame(frameInfo); } catch { /* 呼叫端錯誤不中斷渲染 */ } }
+      const perf = win && win.performance;
+      if (perf) frameMs = frameMs * 0.9 + (perf.now() - t0) * 0.1;
+    }
     rafId = raf(frame);
   }
 
   function start() {
     if (dead || running) return;
-    running = true; lastT = -1;
+    running = true; lastT = -1; forced = true;
     rafId = raf(frame);
   }
   function stop() {
@@ -834,7 +848,8 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
   }
 
   const onVis = () => { if (doc.hidden) stop(); else start(); };
-  const onLost = (e) => { e.preventDefault(); die('webgl context lost'); };
+  // 不處理 context 還原（直接退回 2D 後備），所以不呼叫 preventDefault
+  const onLost = () => die('webgl context lost');
   if (doc) doc.addEventListener('visibilitychange', onVis);
   if (canvas.addEventListener) canvas.addEventListener('webglcontextlost', onLost);
   function detach() {
@@ -842,6 +857,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
     if (canvas.removeEventListener) canvas.removeEventListener('webglcontextlost', onLost);
   }
 
+  if (gl.isContextLost()) { freeAll(); detach(); throw new Error('webgl context lost during setup'); }
   if (!(doc && doc.hidden)) start();
 
   return {
@@ -861,6 +877,8 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias 
     orbitInput(dAz, dEl) { pendAz += +dAz || 0; pendEl += +dEl || 0; },
     zoomBy(factor) { const f = +factor; if (f > 0 && Number.isFinite(f)) pendZoom *= f; },
     setHeld(b) { held = !!b; },
+    // 對話框開啟時降到約 24fps（場景本來就被壓暗、只是背景）
+    setThrottle(on) { throttleMs = on ? 1000 / THROTTLE_FPS : 0; },
     resize() { if (!dead) { try { resize(); } catch (e) { die(e.message); } } },
     destroy() {
       if (dead) return;
