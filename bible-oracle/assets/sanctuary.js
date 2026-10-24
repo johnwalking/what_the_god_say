@@ -93,7 +93,7 @@ function restartClass(el, name) {
 export function createSanctuary({ root = document, reducedMotion } = {}) {
   const reduced = reducedMotion ?? detectReducedMotion();
   const $ = (id) => root.getElementById?.(id) ?? root.querySelector?.(`#${id}`) ?? null;
-  const doc = root.ownerDocument ?? (root.nodeType === 9 ? root : globalThis.document);
+  const doc = root.ownerDocument ?? (root.nodeType === 9 ? root : (typeof document !== 'undefined' ? document : undefined));
   const win = doc?.defaultView ?? globalThis;
 
   let dustTimer = null; // requestAnimationFrame id
@@ -113,16 +113,22 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     if (!ctx) return;
     let w = 0;
     let h = 0;
+    let motes = [];
     const resize = () => {
       const dpr = Math.min(win.devicePixelRatio || 1, 2);
+      const ow = w;
+      const oh = h;
       w = win.innerWidth;
       h = win.innerHeight;
+      if (ow > 0 && oh > 0) {
+        for (const m of motes) { m.x = (m.x / ow) * w; m.y = (m.y / oh) * h; }
+      }
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
-    const motes = Array.from({ length: 粒子數 }, () => ({
+    motes = Array.from({ length: 粒子數 }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
       r: 0.6 + Math.random() * 1.6,
@@ -148,21 +154,21 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
       }
     };
     const onVisibility = () => {
-      if (doc.hidden) {
+      if (doc?.hidden) {
         if (dustTimer !== null) { win.cancelAnimationFrame(dustTimer); dustTimer = null; }
       } else if (dustTimer === null) {
         dustTimer = win.requestAnimationFrame(frame);
       }
     };
     win.addEventListener('resize', resize);
-    doc.addEventListener('visibilitychange', onVisibility);
+    doc?.addEventListener?.('visibilitychange', onVisibility);
     dustCleanup = () => {
       win.removeEventListener('resize', resize);
-      doc.removeEventListener('visibilitychange', onVisibility);
+      doc?.removeEventListener?.('visibilitychange', onVisibility);
       ctx.clearRect(0, 0, w, h);
     };
     // 分頁一開始就隱藏時不排程，等 visibilitychange 再啟動；cleanup 已登記，stopDust 仍可收拾。
-    if (!doc.hidden) dustTimer = win.requestAnimationFrame(frame);
+    if (!doc?.hidden) dustTimer = win.requestAnimationFrame(frame);
   }
 
   function stopDust() {
@@ -172,9 +178,24 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     dustCleanup = null;
   }
 
+  const mainEl = () => root.querySelector?.('main.page') ?? root.querySelector?.('.page') ?? null;
+
+  /** 入口未開時鎖住主內容；由控制器自己設定，這樣 app.js 沒載入時頁面仍可用（靜態 HTML 不帶 inert）。 */
+  function lockMain() {
+    const gate = $('gate');
+    if (gate && !gate.hidden) mainEl()?.setAttribute('inert', '');
+  }
+  lockMain();
+
+  function focusGate() {
+    try {
+      $('enter-sound')?.focus?.({ preventScroll: true });
+    } catch { /* 焦點失敗不影響流程 */ }
+  }
+
   function openGate() {
     const gate = $('gate');
-    const main = root.querySelector?.('main.page') ?? root.querySelector?.('.page');
+    const main = mainEl();
     doc?.body?.classList.add('entered');
     const finish = () => {
       clearTimeout(gateTimer);
@@ -182,6 +203,9 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
       if (gate) gate.hidden = true;
       main?.removeAttribute('inert');
       $('mute')?.removeAttribute('hidden');
+      try {
+        $('question')?.focus?.({ preventScroll: true });
+      } catch { /* 焦點失敗不影響流程 */ }
     };
     if (!gate) { finish(); return; }
     gate.classList.add('open');
@@ -207,19 +231,20 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     const late = [refEl, quipEl];
     for (const el of late) el?.classList.remove('reveal-late');
     if (!plan.animate || reduced) {
-      if (verseEl) {
-        verseEl.textContent = verse;
-        verseEl.removeAttribute('aria-label');
-      }
+      if (verseEl) verseEl.textContent = verse;
       return { total: 0 };
     }
     const { chars, delays, total } = revealSchedule(verse);
     if (verseEl) {
       verseEl.textContent = '';
-      verseEl.setAttribute('aria-label', verse);
-      const frag = (verseEl.ownerDocument ?? doc).createDocumentFragment();
+      const d = verseEl.ownerDocument ?? doc;
+      const frag = d.createDocumentFragment();
+      const full = d.createElement('span');
+      full.className = 'visually-hidden';
+      full.textContent = verse;
+      frag.appendChild(full);
       chars.forEach((c, i) => {
-        const span = (verseEl.ownerDocument ?? doc).createElement('span');
+        const span = d.createElement('span');
         span.className = 'ch';
         span.style.setProperty('--d', `${delays[i]}s`);
         span.setAttribute('aria-hidden', 'true');
@@ -248,5 +273,5 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     }
   }
 
-  return { mountWindow, startDust, stopDust, openGate, pulse, setBusy, reveal, calm };
+  return { mountWindow, startDust, stopDust, openGate, focusGate, pulse, setBusy, reveal, calm };
 }
