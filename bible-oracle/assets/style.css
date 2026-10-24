@@ -20,7 +20,7 @@
 
 * { box-sizing: border-box; }
 
-html { background: var(--bg); }
+html { background: var(--bg); overflow-x: clip; }
 
 body {
   position: relative;
@@ -28,7 +28,7 @@ body {
   padding: calc(var(--rose-size) + 3.5rem) 1.25rem 4rem;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow-x: hidden;
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   font-family: var(--serif);
