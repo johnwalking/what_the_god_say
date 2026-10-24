@@ -1,6 +1,7 @@
 """Embedding 後端。測試用 HashEmbedder，正式用本地 bge-m3。"""
 from __future__ import annotations
 
+import threading
 import zlib
 from typing import List, Optional
 
@@ -45,6 +46,8 @@ class BgeM3Embedder:
     def __init__(self, batch_size: int = 32):
         self.batch_size = batch_size
         self._model: Optional[object] = None
+        # 請求在 threadpool 並行進來，SentenceTransformer 在 MPS 上不是執行緒安全的
+        self._lock = threading.Lock()
 
     def _load(self):
         import torch
@@ -55,13 +58,14 @@ class BgeM3Embedder:
         self._model.max_seq_length = 256
 
     def encode(self, texts: List[str]) -> np.ndarray:
-        if self._model is None:
-            self._load()
-        vecs = self._model.encode(
-            texts,
-            batch_size=self.batch_size,
-            normalize_embeddings=True,
-            convert_to_numpy=True,
-            show_progress_bar=False,
-        )
+        with self._lock:
+            if self._model is None:
+                self._load()
+            vecs = self._model.encode(
+                texts,
+                batch_size=self.batch_size,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+            )
         return vecs.astype(np.float32)

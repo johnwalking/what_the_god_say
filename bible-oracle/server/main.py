@@ -97,6 +97,7 @@ def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
         examples=load_examples(topics_file), wrappers=topics_file['wrappers'],
         cache=cache or Cache(os.path.join(ROOT, 'data', 'cache.sqlite')),
         rerank_fn=config['fn'],
+        cache_ns=f'{RERANK_CONFIG_NAME}|{len(corpus.verses)}',
     )
 
 

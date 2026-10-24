@@ -30,7 +30,7 @@ class Answer:
 
 
 class Pipeline:
-    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20, rerank_fn=None):
+    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20, rerank_fn=None, cache_ns: str = ''):
         self.corpus = corpus
         self.retriever = retriever
         self.llm = llm
@@ -39,10 +39,12 @@ class Pipeline:
         self.cache = cache
         self.k = k
         self.rerank_fn = rerank_fn or rerank
+        # 快取命名空間：rerank 設定或語料版本改變時換一個，舊快取就不會被誤用。空字串 = 舊格式的 key。
+        self._ns = f'{cache_ns}:' if cache_ns else ''
 
     def rank(self, question: str) -> Tuple[List[str], bool]:
         """候選經文 id，rerank 選中者排第一，其餘維持檢索順序。回傳 (排序, rerank 是否成功)。"""
-        key = f'rank:{normalize(question)}'
+        key = f'rank:{self._ns}{normalize(question)}'
         cached = self.cache.get(key)
         if cached:
             return cached['order'], True
@@ -60,7 +62,7 @@ class Pipeline:
         return order, True
 
     def _quip(self, question: str, verse: Verse) -> Tuple[str, bool]:
-        key = f'quip:{normalize(question)}:{verse.id}'
+        key = f'quip:{self._ns}{normalize(question)}:{verse.id}'
         cached = self.cache.get(key)
         if cached:
             return cached, True

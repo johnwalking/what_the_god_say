@@ -83,3 +83,28 @@ def test_custom_rerank_fn_is_used():
     ids = _top_ids(pipeline)
     answer = pipeline.ask(Q)
     assert answer.stage == 'rerank+llm' and answer.verse_id == ids[-1]
+
+
+def test_cache_namespace_isolates_rank_and_quip():
+    from server.cache import Cache
+    shared = Cache()
+    llm = FakeLLM({'choice': 2}, {'quip': GOOD}, {'choice': 3}, {'quip': GOOD})
+    first = make_pipeline(llm, cache=shared, cache_ns='cfgA|4').ask(Q)
+    calls = len(llm.calls)
+    # 同一個問題、不同 ns：不能吃到前一個設定的快取
+    other = make_pipeline(llm, cache=shared, cache_ns='cfgB|4').ask(Q)
+    assert len(llm.calls) == calls + 2
+    assert other.verse_id != first.verse_id
+    # 同 ns 命中快取，不再呼叫 LLM
+    make_pipeline(llm, cache=shared, cache_ns='cfgA|4').ask(Q)
+    assert len(llm.calls) == calls + 2
+
+
+def test_empty_namespace_keeps_legacy_key_format():
+    from server.cache import Cache
+    from server.textutil import normalize
+    shared = Cache()
+    pipeline = make_pipeline(FakeLLM({'choice': 2}, {'quip': GOOD}), cache=shared)
+    answer = pipeline.ask(Q)
+    assert shared.get(f'rank:{normalize(Q)}') is not None
+    assert shared.get(f'quip:{normalize(Q)}:{answer.verse_id}') == GOOD

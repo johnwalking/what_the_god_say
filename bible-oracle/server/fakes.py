@@ -34,11 +34,11 @@ def small_corpus() -> Corpus:
     ])
 
 
-def make_pipeline(llm, k: int = 3, cache=None) -> Pipeline:
+def make_pipeline(llm, k: int = 3, cache=None, cache_ns: str = '') -> Pipeline:
     corpus, embedder = small_corpus(), HashEmbedder()
     matrix = embedder.encode([v.text for v in corpus.verses])
     return Pipeline(
         corpus, Retriever(corpus, matrix, embedder), llm,
         examples=[('範例經文', '範例補刀')], wrappers=['主已經回答了，是你還沒讀懂。'],
-        cache=cache or Cache(), k=k,
+        cache=cache or Cache(), k=k, cache_ns=cache_ns,
     )
