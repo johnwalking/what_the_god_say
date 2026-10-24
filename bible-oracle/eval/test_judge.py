@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from eval.judge import judged_keys, sample, summarize
+import pytest
+
+from eval.judge import judged_keys, sample, summarize, validate_scores
 
 
 def _results():
@@ -47,3 +49,48 @@ def test_summarize_averages_per_method():
     out = summarize(key, scores)
     assert out['M1'] == {'n': 2, 'relevance': 3.0, 'funny': 3.0, 'compliant': 0.5}
     assert out['M2']['relevance'] == 5.0
+
+
+_KEY = {'a': {'method': 'M1', 'q': 'x'}, 'b': {'method': 'M2', 'q': 'x'}}
+
+
+def _ok(i):
+    return {'id': i, 'relevance': 3, 'funny': 3, 'compliant': True}
+
+
+def test_validate_scores_accepts_complete_valid_scores():
+    validate_scores(_KEY, [_ok('a'), _ok('b')])
+
+
+def test_validate_scores_rejects_unknown_id():
+    with pytest.raises(ValueError, match='zzz'):
+        validate_scores(_KEY, [_ok('a'), _ok('b'), _ok('zzz')])
+
+
+def test_validate_scores_rejects_duplicate_id():
+    with pytest.raises(ValueError, match='a'):
+        validate_scores(_KEY, [_ok('a'), _ok('a'), _ok('b')])
+
+
+def test_validate_scores_rejects_missing_id():
+    with pytest.raises(ValueError, match='b'):
+        validate_scores(_KEY, [_ok('a')])
+
+
+@pytest.mark.parametrize('field', ['relevance', 'funny'])
+@pytest.mark.parametrize('bad', [0, 6, 3.5, '3', True, None])
+def test_validate_scores_rejects_bad_rating(field, bad):
+    row = dict(_ok('a'), **{field: bad})
+    with pytest.raises(ValueError, match=field):
+        validate_scores(_KEY, [row, _ok('b')])
+
+
+@pytest.mark.parametrize('bad', ['false', 'true', 1, 0, None])
+def test_validate_scores_rejects_non_bool_compliant(bad):
+    with pytest.raises(ValueError, match='compliant'):
+        validate_scores(_KEY, [dict(_ok('a'), compliant=bad), _ok('b')])
+
+
+def test_summarize_validates_first():
+    with pytest.raises(ValueError):
+        summarize(_KEY, [_ok('a')])

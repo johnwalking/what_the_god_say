@@ -49,7 +49,29 @@ def sample(results: dict, n: int = 40, seed: int = 0) -> Tuple[List[dict], Dict[
     return batch, key
 
 
+def validate_scores(key: Dict[str, dict], scores: List[dict]) -> None:
+    """檢查評分清單：id 必須都在 key、不重複、完整覆蓋；數值為 1..5 的 int，compliant 為真正的 bool。"""
+    seen = set()
+    for score in scores:
+        item_id = score.get('id')
+        if item_id not in key:
+            raise ValueError(f'未知的 id：{item_id!r}')
+        if item_id in seen:
+            raise ValueError(f'重複的 id：{item_id!r}')
+        seen.add(item_id)
+        for field in ('relevance', 'funny'):
+            value = score.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 5:
+                raise ValueError(f'{item_id} 的 {field} 必須是 1..5 的整數，收到 {value!r}')
+        if not isinstance(score.get('compliant'), bool):
+            raise ValueError(f"{item_id} 的 compliant 必須是 bool，收到 {score.get('compliant')!r}")
+    missing = sorted(set(key) - seen)
+    if missing:
+        raise ValueError(f'缺少 {len(missing)} 個 id 的評分：{missing[:5]}')
+
+
 def summarize(key: Dict[str, dict], scores: List[dict]) -> Dict[str, dict]:
+    validate_scores(key, scores)
     grouped = defaultdict(list)
     for score in scores:
         grouped[key[score['id']]['method']].append(score)
