@@ -4,6 +4,8 @@
  */
 import { answer, buildTopicIndex, isCrisis, CARE_MESSAGE } from './match.js';
 import { downloadCard } from './card.js';
+import { createSanctuary } from './sanctuary.js';
+import { createAudio } from './audio.js';
 
 /** topics.json 或 fallback.json 掛掉時的緊急經文池，確保網站永遠答得出來。 */
 const 緊急經文池 = [
@@ -46,7 +48,36 @@ const el = {
   quip: document.querySelector('#quip'),
   again: document.querySelector('#again'),
   save: document.querySelector('#save'),
+  gate: document.querySelector('#gate'),
+  enterSound: document.querySelector('#enter-sound'),
+  enterSilent: document.querySelector('#enter-silent'),
+  mute: document.querySelector('#mute'),
 };
+
+/** 取 localStorage 本身就可能拋錯（禁用 cookie、隱私模式），所以包起來。 */
+function 取儲存() {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 靜默進入只是「這次不放音樂」，不該蓋掉使用者存下的靜音偏好：
+ * 暫停期間 setItem 不寫入，之後使用者自己按靜音鍵才會存。
+ */
+let 暫停寫入 = false;
+const 底層儲存 = 取儲存();
+const 儲存 = 底層儲存 && {
+  getItem: (key) => 底層儲存.getItem(key),
+  setItem: (key, value) => { if (!暫停寫入) 底層儲存.setItem(key, value); },
+};
+
+const sanctuary = createSanctuary({
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+});
+const audio = createAudio({ storage: 儲存 });
 
 let data = null;
 let 目前的問題 = '';
@@ -109,16 +140,26 @@ function render(result, question) {
   // 縱深防禦：危機結果永遠不能被當成經文顯示
   if (result.kind === 'crisis') {
     目前的答案 = null;
-    showNotice(CARE_MESSAGE);
+    showCare(CARE_MESSAGE);
     return;
   }
   el.notice.hidden = true;
   el.asked.textContent = question.length > 100 ? `${question.slice(0, 100)}⋯` : question;
-  el.verse.textContent = result.text;
   el.ref.textContent = `—— ${result.ref}`;
   el.quip.textContent = result.quip;
   el.answer.hidden = false;
   el.again.hidden = result.poolSize <= 1;
+  // 經文文字交給儀式逐字浮現；一併響鐘
+  sanctuary.reveal({ verseEl: el.verse, refEl: el.ref, quipEl: el.quip, text: result.text, kind: result.kind });
+  audio.bell();
+}
+
+/** 危機訊息：只留關懷文字，儀式全停、配樂收到近乎無聲。 */
+function showCare(message) {
+  sanctuary.setBusy(false);
+  sanctuary.calm();
+  audio.hush(true);
+  showNotice(message);
 }
 
 /** 控制字元不該出現在網址參數裡，一律濾掉。 */
@@ -149,9 +190,12 @@ async function ask(question, n) {
   if (isCrisis(question)) {
     目前的答案 = null;
     writeURL(question, n);
-    showNotice(CARE_MESSAGE);
+    showCare(CARE_MESSAGE);
     return;
   }
+  audio.hush(false);
+  sanctuary.pulse();
+  sanctuary.setBusy(true);
   showNotice('求問中⋯');
 
   try {
@@ -166,7 +210,7 @@ async function ask(question, n) {
       if (body.kind === 'crisis') {
         目前的答案 = null;
         writeURL(question, n);
-        showNotice(body.text);
+        showCare(body.text);
         return;
       }
       result = { ref: body.ref, text: body.text, quip: body.quip, poolSize: body.pool_size };
@@ -180,10 +224,14 @@ async function ask(question, n) {
 
     目前的答案 = result;
     writeURL(question, n);
+    sanctuary.setBusy(false);
     render(result, question);
   } catch (error) {
     console.warn('顯示答案時出錯：', error);
-    if (序號 === 請求序號) showNotice('出了點問題，請再試一次。');
+    if (序號 === 請求序號) {
+      sanctuary.setBusy(false);
+      showNotice('出了點問題，請再試一次。');
+    }
   }
 }
 
@@ -226,10 +274,63 @@ el.save.addEventListener('click', async () => {
   }
 });
 
+/** 靜音鍵的外觀跟著 audio 狀態走。 */
+function syncMute() {
+  const muted = audio.isMuted();
+  el.mute.setAttribute('aria-pressed', String(muted));
+  el.mute.setAttribute('aria-label', muted ? '開啟聲音' : '靜音');
+}
+
+/** 帶 ?q= 的分享連結：入口開了才作答。 */
+let 待答 = null;
+let 已入場 = false;
+let 音樂已啟動 = false;
+
+function enter() {
+  if (已入場) return;
+  已入場 = true;
+  sanctuary.openGate();
+  syncMute();
+  if (待答) {
+    const { question, n } = 待答;
+    待答 = null;
+    ask(question, n);
+  }
+}
+
+el.enterSound.addEventListener('click', () => {
+  audio.start(); // 必須在使用者手勢內同步呼叫，否則瀏覽器不放行
+  音樂已啟動 = true;
+  enter();
+});
+
+el.enterSilent.addEventListener('click', () => {
+  // 不啟動音樂；靜音只對這次有效，不覆寫存下的偏好
+  暫停寫入 = true;
+  try { audio.setMuted(true); } finally { 暫停寫入 = false; }
+  enter();
+});
+
+el.mute.addEventListener('click', () => {
+  const muted = !audio.isMuted();
+  audio.setMuted(muted);
+  // 靜默進入後第一次取消靜音：這是使用者手勢，此時才啟動音樂
+  if (!muted && !音樂已啟動) {
+    audio.start();
+    音樂已啟動 = true;
+  }
+  syncMute();
+});
+
+sanctuary.mountWindow();
+sanctuary.startDust();
+sanctuary.focusGate();
+
 data = await loadData();
 
 const 來自網址 = readURL();
 if (來自網址.question) {
   el.input.value = 來自網址.question;
-  ask(來自網址.question, 來自網址.n);
+  if (已入場) ask(來自網址.question, 來自網址.n);
+  else 待答 = { question: 來自網址.question, n: 來自網址.n };
 }
