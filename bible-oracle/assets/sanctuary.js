@@ -3,6 +3,8 @@
  * 這個檔案的上半部不碰 DOM。
  */
 
+import { createMandala } from './mandala.js';
+
 // ---- 場景旋鈕（皆可調）----
 const IDLE_DELAY_SEC = 4; // 使用者停止操作多久後，自動環繞恢復
 const AUTO_YAW_SPEED = 0.05; // 自動環繞的視角角速度（rad/s）
@@ -25,6 +27,13 @@ const CROSS_SIZE = 0.37; // 十字架高度 = min(寬, 高) × 此值（上限 3
 const FIGURE_SIZE = 0.15; // 門徒基準身高 = min(寬, 高) × 此值（再乘透視 scale）
 const CROSS_HIT_MIN_W = 56; // 十字架按鈕最小寬（px）
 const CROSS_HIT_MIN_H = 96; // 十字架按鈕最小高（px）
+// ---- WebGL 曼陀羅的互動與對位 ----
+const GL_AZ_PER_PX = 0.006; // 水平拖曳 1px 的方位角變化（rad）
+const GL_EL_PER_PX = 0.005; // 垂直拖曳 1px 的仰角變化（rad）
+const GL_WHEEL_ZOOM = 0.0012; // 滾輪縮放靈敏度（相機距離的指數）
+const GL_HIT_W_MOBILE = 72; // 手機（<600px）十字架按鈕最小寬（px）
+const GL_PORTRAIT_BIAS = 0.5; // 直向畫面把曼陀羅整體上移的程度（傳給 createMandala 的 portraitBias）
+const GL_HINT_GAP = 24; // 「點擊這裡」與十字架頂端的距離（px）
 
 /** 逐碼點拆字，讓罕用字（surrogate pair）不會被切成兩半。 */
 export function splitGraphemes(text) {
@@ -311,7 +320,7 @@ function restartClass(el, name) {
   el.classList.add(name);
 }
 
-export function createSanctuary({ root = document, reducedMotion } = {}) {
+export function createSanctuary({ root = document, reducedMotion, createMandalaFn = createMandala } = {}) {
   const reduced = reducedMotion ?? detectReducedMotion();
   const $ = (id) => root.getElementById?.(id) ?? root.querySelector?.(`#${id}`) ?? null;
   const doc = root.ownerDocument ?? (root.nodeType === 9 ? root : (typeof document !== 'undefined' ? document : undefined));
@@ -321,19 +330,195 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
   let dustCleanup = null;
   let pulseTimer = null;
 
-  // ---- 場景（Canvas 2D 偽 3D）----
-  const sceneApi = { cleanup: null, view: null };
+  // ---- 場景：優先 WebGL2 曼陀羅，失敗退回 Canvas 2D 偽 3D ----
+  const sceneApi = { cleanup: null, view: null, mandala: null, backend: null };
 
   function setSceneState(state) {
     $('scene')?.setAttribute('data-state', state);
     if (sceneApi.view) sceneApi.view.state = state;
+    sceneApi.mandala?.setState(state);
   }
 
   function mountScene() {
     const canvas = $('scene');
-    if (!canvas || sceneApi.cleanup || !canvas.getContext) return;
+    if (!canvas || sceneApi.cleanup) return;
+    if (mountMandala(canvas)) return;
+    mount2d(freshCanvas(canvas) ?? canvas);
+  }
+
+  /** 嘗試 WebGL2 曼陀羅；成功回 true。事件綁定、十字架對位都在這裡。 */
+  function mountMandala(canvas) {
+    const crossBtn = $('cross');
+    const hintEl = $('cross-hint');
+    const dialogEl = $('ask-dialog');
+    let m = null;
+    let failed = false;
+    const fallBack = (reason) => {
+      if (failed) return;
+      failed = true;
+      if (typeof console !== 'undefined') console.warn(`曼陀羅場景無法使用，改用 2D 後備：${reason}`);
+      // 若 mountMandala 仍在進行中（同步失敗），由 mountScene 繼續走 2D；執行期失敗則在此切換
+      if (sceneApi.mandala) {
+        sceneApi.cleanup?.();
+        sceneApi.cleanup = null;
+        const fresh = freshCanvas($('scene'));
+        if (fresh) mount2d(fresh);
+      }
+    };
+    try {
+      m = createMandalaFn(canvas, { reducedMotion: reduced, onFrame: (info) => align(info), onFail: fallBack, portraitBias: GL_PORTRAIT_BIAS });
+    } catch (e) {
+      m = null;
+      fallBack(e?.message ?? String(e));
+    }
+    if (!m || failed) { try { m?.destroy?.(); } catch { /* 略 */ } return false; }
+    sceneApi.mandala = m;
+    sceneApi.backend = 'webgl';
+    m.setState(canvas.getAttribute('data-state') || 'idle');
+
+    // ---- DOM 對位 ----
+    const last = { x: NaN, y: NaN, w: NaN, h: NaN };
+    function align(info) {
+      const c = info?.cross;
+      if (!c || !crossBtn?.style) return;
+      const cx = c.x;
+      const topY = c.topY;
+      const hPx = Math.max(CROSS_HIT_MIN_H, Math.abs(c.bottomY - topY));
+      const minW = (win.innerWidth || 1000) < 600 ? GL_HIT_W_MOBILE : CROSS_HIT_MIN_W;
+      const wPx = Math.max(minW, c.width * 1.1);
+      const cy = (topY + c.bottomY) / 2;
+      if (Math.abs(cx - last.x) < 0.25 && Math.abs(cy - last.y) < 0.25 && Math.abs(wPx - last.w) < 0.5 && Math.abs(hPx - last.h) < 0.5) return;
+      last.x = cx; last.y = cy; last.w = wPx; last.h = hPx;
+      const set = (el, k, v) => el?.style?.setProperty(k, `${v.toFixed(1)}px`);
+      set(crossBtn, '--cx', cx); set(crossBtn, '--cy', cy);
+      set(crossBtn, '--cw', wPx); set(crossBtn, '--ch', hPx);
+      set(hintEl, '--hx', cx); set(hintEl, '--hy', topY - GL_HINT_GAP);
+    }
+
+    // ---- 互動 ----
+    const pointers = new Map();
+    let pinchDist = 0;
+    let moved = 0;
+    let suppressClick = false;
+    const onDown = (e) => {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      suppressClick = false;
+      if (pointers.size === 1) { moved = 0; m.setHeld(true); }
+      else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        suppressClick = true;
+      }
+      try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 略 */ }
+    };
+    const onMove = (e) => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      const cur = { x: e.clientX, y: e.clientY };
+      pointers.set(e.pointerId, cur);
+      if (pointers.size >= 2) {
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && dist > 0) m.zoomBy(pinchDist / dist); // 兩指張開 → 靠近
+        pinchDist = dist;
+        return;
+      }
+      const dx = cur.x - prev.x;
+      const dy = cur.y - prev.y;
+      moved += Math.abs(dx) + Math.abs(dy);
+      if (moved > DRAG_THRESHOLD_PX) {
+        suppressClick = true;
+        // 場景跟著手指走：向右拖 → 相機向左繞（方位角減小）；向下拖 → 仰角增加
+        m.orbitInput(-dx * GL_AZ_PER_PX, dy * GL_EL_PER_PX);
+      }
+    };
+    const onUp = (e) => {
+      if (!pointers.delete(e.pointerId)) return;
+      if (pointers.size < 2) pinchDist = 0;
+      if (pointers.size === 0) {
+        m.setHeld(false);
+        // 拖曳後那一下 click 要吃掉；用計時器清掉旗標以免影響之後的真點擊
+        if (suppressClick) setTimeout(() => { suppressClick = false; }, 60);
+      }
+    };
+    const onWheel = (e) => {
+      if (e.target?.closest?.('dialog')) return;
+      e.preventDefault();
+      m.zoomBy(Math.exp(e.deltaY * GL_WHEEL_ZOOM));
+    };
+    const interactive = /^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/;
+    const onKey = (e) => {
+      if (e.key !== ' ' && e.code !== 'Space') return;
+      const t = e.target;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t && (interactive.test(t.tagName) || t.isContentEditable || t.closest?.('dialog'))) return;
+      if (doc?.querySelector?.('dialog[open]')) return;
+      e.preventDefault();
+      m.setPaused(!m.isPaused());
+    };
+    const guardClick = (e) => {
+      if (suppressClick) { e.preventDefault(); e.stopImmediatePropagation(); }
+    };
+    const onResize = () => m.resize();
+    const targets = [canvas, crossBtn].filter(Boolean);
+    for (const el of targets) {
+      el.addEventListener?.('pointerdown', onDown);
+      el.addEventListener?.('pointermove', onMove);
+      el.addEventListener?.('pointerup', onUp);
+      el.addEventListener?.('pointercancel', onUp);
+    }
+    crossBtn?.addEventListener?.('click', guardClick, true);
+    win.addEventListener?.('wheel', onWheel, { passive: false });
+    win.addEventListener?.('keydown', onKey);
+    win.addEventListener?.('resize', onResize);
+
+    // 對話框開啟時略降場景亮度（CSS opacity 轉場）
+    let observer = null;
+    const syncDim = () => canvas.classList?.toggle('dim', Boolean(dialogEl?.hasAttribute?.('open')));
+    if (dialogEl && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(syncDim);
+      observer.observe(dialogEl, { attributes: true, attributeFilter: ['open'] });
+      syncDim();
+    }
+
+    sceneApi.cleanup = () => {
+      for (const el of targets) {
+        el.removeEventListener?.('pointerdown', onDown);
+        el.removeEventListener?.('pointermove', onMove);
+        el.removeEventListener?.('pointerup', onUp);
+        el.removeEventListener?.('pointercancel', onUp);
+      }
+      crossBtn?.removeEventListener?.('click', guardClick, true);
+      win.removeEventListener?.('wheel', onWheel);
+      win.removeEventListener?.('keydown', onKey);
+      win.removeEventListener?.('resize', onResize);
+      observer?.disconnect();
+      for (const [el, keys] of [[crossBtn, ['--cx', '--cy', '--cw', '--ch']], [hintEl, ['--hx', '--hy']]]) {
+        for (const k of keys) el?.style?.removeProperty?.(k); // 退回 2D 時改由 --cross-* 定位
+      }
+      canvas.classList?.remove('dim');
+      try { m.destroy(); } catch { /* 略 */ }
+      sceneApi.mandala = null;
+      sceneApi.backend = null;
+    };
+    return true;
+  }
+
+  /** WebGL 已佔用的畫布無法再取 2D context：換一張新的同 id 畫布。 */
+  function freshCanvas(old) {
+    if (!old) return null;
+    if (old.getContext?.('2d')) return old;
+    const clone = old.cloneNode?.(false);
+    if (!clone) return null;
+    old.replaceWith(clone);
+    return clone;
+  }
+
+  function mount2d(canvas) {
+    if (!canvas.getContext) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    sceneApi.backend = 'canvas2d';
     const crossBtn = $('cross');
     const discs = discipleRings(12);
     const view = {
@@ -578,6 +763,7 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
       win.removeEventListener('resize', resize);
       doc?.removeEventListener?.('visibilitychange', onVisibility);
       sceneApi.view = null;
+      sceneApi.backend = null;
     };
   }
 
@@ -588,8 +774,14 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
 
   /** 場景目前的視角與狀態（驗證與除錯用）；未掛載回 null。 */
   function getSceneState() {
+    if (sceneApi.mandala) return { backend: 'webgl', ...sceneApi.mandala.getDebug() };
     const v = sceneApi.view;
     return v ? { state: v.state, yaw: v.yaw, pitch: v.pitch, zoom: v.zoom, t: v.t, paused: v.paused, speed: v.speed, glow: v.glow + v.kick, pose: { ...v.pose } } : null;
+  }
+
+  /** 目前使用的場景後端：'webgl' | 'canvas2d' | null（未掛載）。 */
+  function getSceneBackend() {
+    return sceneApi.backend;
   }
 
   function getCrossRect() {
@@ -681,6 +873,7 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     const el = $('beams');
     if (reduced) return;
     if (sceneApi.view) sceneApi.view.kick = 1;
+    sceneApi.mandala?.pulse();
     if (!el) return;
     restartClass(el, 'pulse');
     doc?.body && restartClass(doc.body, 'pulsing');
@@ -745,5 +938,5 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     }
   }
 
-  return { mountScene, unmountScene, getSceneState, getCrossRect, setWorship, startDust, stopDust, pulse, setBusy, reveal, calm };
+  return { mountScene, unmountScene, getSceneState, getSceneBackend, getCrossRect, setWorship, startDust, stopDust, pulse, setBusy, reveal, calm };
 }

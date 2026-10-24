@@ -14,6 +14,8 @@ const CAM_MIN_EYE_Y = 1.2;               // 相機高度下限（不鑽到地板
 const FOV_Y = 0.80;                      // 垂直視角（弧度，橫向畫面）
 const FOV_H_MIN = 0.95;                  // 直向手機時保留的最小水平視角（弧度）
 const FOV_Y_MAX = 1.25;                  // 直向時垂直視角上限
+// portraitBias（createMandala 選項，預設 0＝關）：直向時場景整體上移的 NDC 量 = portraitBias × (1 − 寬高比)
+const PORTRAIT_ORBIT = { startEl: 0.62, elAmp: 0.2, minEl: 0.3, startDist: 29 }; // portraitBias 啟用且直向時：仰角路徑 0.42–0.82、起始距離拉近
 const NEAR = 0.5, FAR = 220;             // 投影近／遠平面
 const DPR_MOBILE = 1.5, DPR_DESKTOP = 2; // devicePixelRatio 上限（寬 ≥ 900px 視為桌面）
 
@@ -438,7 +440,7 @@ void main() {
 }`;
 
 // ── 公開介面 ─────────────────────────────────────────────────
-export function createMandala(canvas, { reducedMotion = false, seed = 1, onFrame = null, onFail = null } = {}) {
+export function createMandala(canvas, { reducedMotion = false, seed = 1, onFrame = null, onFail = null, portraitBias = 0 } = {}) {
   const fail = (reason) => {
     try { if (typeof onFail === 'function') onFail(String(reason)); } catch { /* 呼叫端錯誤不外拋 */ }
     return null;
@@ -453,7 +455,7 @@ export function createMandala(canvas, { reducedMotion = false, seed = 1, onFrame
   }
   if (!gl) return fail('webgl2 unavailable');
   try {
-    return setup(canvas, gl, { reducedMotion, seed, onFrame, onFail: fail });
+    return setup(canvas, gl, { reducedMotion, seed, onFrame, onFail: fail, portraitBias });
   } catch (e) {
     return fail(e && e.message ? e.message : e);
   }
@@ -493,7 +495,7 @@ function uniforms(gl, prog, names) {
   return u;
 }
 
-function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
+function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail, portraitBias }) {
   const win = typeof window !== 'undefined' ? window : null;
   const doc = typeof document !== 'undefined' ? document : null;
   const raf = win && win.requestAnimationFrame ? win.requestAnimationFrame.bind(win) : null;
@@ -627,6 +629,9 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
   // ── 狀態（熱路徑重用） ──
   let orbit = createOrbit();
   const orbitParams = ORBIT_DEFAULTS;
+  // 直向（portraitBias > 0 且寬 < 高）：自動環繞的仰角路徑抬高，俯視讓同心環鋪滿畫面而非一條地平線
+  const portraitOrbit = { ...ORBIT_DEFAULTS, ...PORTRAIT_ORBIT };
+  if (portraitBias > 0 && W < H) { orbit.el = portraitOrbit.startEl; orbit.dist = portraitOrbit.startDist; }
   const input = { dragDAz: 0, dragDEl: 0, zoomFactor: 1, held: false, autoOrbit: !reducedMotion, paused: false };
   let pendAz = 0, pendEl = 0, pendZoom = 1, held = false, paused = false;
   let stateName = 'idle';
@@ -656,7 +661,7 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     input.dragDAz = pendAz; input.dragDEl = pendEl; input.zoomFactor = pendZoom;
     input.held = held; input.paused = paused;
     pendAz = 0; pendEl = 0; pendZoom = 1;
-    orbit = stepOrbit(orbit, dt, input, orbitParams);
+    orbit = stepOrbit(orbit, dt, input, portraitBias > 0 && W < H ? portraitOrbit : orbitParams);
     if (reducedMotion && !held) { orbit.vAz = 0; orbit.vEl = 0; }
 
     const kPose = reducedMotion ? 1 : 1 - Math.exp(-dt * POSE_RATE);
@@ -683,6 +688,8 @@ function setup(canvas, gl, { reducedMotion, seed, onFrame, onFail }) {
     orbitEye(CAM_TARGET, orbit.az, orbit.el, orbit.dist, eye);
     if (eye[1] < CAM_MIN_EYE_Y) eye[1] = CAM_MIN_EYE_Y;
     mat4Perspective(fov, aspect, NEAR, FAR, proj);
+    // 直向畫面：把整個場景往上推（投影的垂直主點偏移，NDC），讓下方不是一大片空地板
+    if (portraitBias > 0 && aspect < 1) proj[9] = -portraitBias * (1 - aspect);
     mat4LookAt(eye, CAM_TARGET, up, view);
     mat4Multiply(proj, view, viewProj);
     crossYaw = Math.atan2(eye[2], eye[0]);

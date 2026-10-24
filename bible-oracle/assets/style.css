@@ -182,17 +182,19 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
   z-index: 1;
   touch-action: none;
   cursor: grab;
+  transition: opacity 0.6s ease;
 }
 .scene:active { cursor: grabbing; }
+.scene.dim { opacity: 0.55; } /* 對話框開啟時略降場景亮度 */
 .dust { z-index: 1; }
 
-/* 透明按鈕，位置與大小由 sanctuary.js 依十字架計算（--cross-*） */
+/* 透明按鈕，位置與大小由 sanctuary.js 依十字架計算（WebGL：--cx/--cy/--cw/--ch；2D 後備：--cross-*） */
 .cross {
   position: fixed;
-  left: var(--cross-x, 50%);
-  top: var(--cross-cy, 40%);
-  width: var(--cross-w, 56px);
-  height: var(--cross-h, 96px);
+  left: var(--cx, var(--cross-x, 50%));
+  top: var(--cy, var(--cross-cy, 40%));
+  width: var(--cw, var(--cross-w, 56px));
+  height: var(--ch, var(--cross-h, 96px));
   transform: translate(-50%, -50%);
   z-index: 3;
   padding: 0;
@@ -214,8 +216,8 @@ body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
 /* 「點擊這裡」提示：十字架正上方，呼吸閃動，箭頭上下浮動 */
 .cross-hint {
   position: fixed;
-  left: var(--cross-x, 50%);
-  top: var(--cross-top, 30%);
+  left: var(--hx, var(--cross-x, 50%));
+  top: var(--hy, var(--cross-top, 30%));
   transform: translate(-50%, -100%);
   z-index: 3;
   margin: 0;

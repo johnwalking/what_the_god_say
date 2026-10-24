@@ -162,3 +162,85 @@ test('缺少元素時控制器不丟錯', () => {
   const s = createSanctuary({ root, reducedMotion: true });
   s.mountScene(); s.getCrossRect(); s.setWorship('ask'); s.pulse(); s.calm(); s.setBusy(true);
 });
+
+// ---- WebGL 曼陀羅後端（注入假的 createMandala）----
+function fakeWin() {
+  const w = { raf: 0, listeners: new Map(), innerWidth: 390, innerHeight: 800, devicePixelRatio: 1 };
+  w.requestAnimationFrame = () => { w.raf += 1; return w.raf; };
+  w.cancelAnimationFrame = () => {};
+  w.addEventListener = (t, fn) => w.listeners.set(t, fn);
+  w.removeEventListener = (t) => w.listeners.delete(t);
+  return w;
+}
+function mandalaRig({ result = 'ok', reducedMotion = false } = {}) {
+  const calls = [];
+  const win = fakeWin();
+  const mk = (id) => ({ ...fakeEl(id), addEventListener() {}, removeEventListener() {}, style: { setProperty() {} } });
+  const canvas = { ...mk('scene'), getContext: (k) => { calls.push(`ctx:${k}`); return k === '2d' ? { setTransform() {}, clearRect() {} } : null; } };
+  const els = { scene: canvas, cross: mk('cross'), beams: fakeEl('beams'), notice: fakeEl('notice') };
+  const root = { nodeType: 9, defaultView: win, getElementById: (id) => els[id] ?? null, querySelector: () => null, querySelectorAll: () => [] };
+  let opts = null;
+  const m = {
+    setState: (s) => calls.push(`state:${s}`), pulse: () => calls.push('pulse'), setPaused() {}, isPaused: () => false,
+    orbitInput() {}, zoomBy() {}, setHeld() {}, resize() {}, destroy: () => calls.push('destroy'), getDebug: () => ({ frames: 1 }),
+  };
+  const createMandalaFn = (c, o) => { opts = o; calls.push('create'); return result === 'ok' ? m : null; };
+  const s = createSanctuary({ root, reducedMotion, createMandalaFn });
+  return { s, calls, win, els, getOpts: () => opts };
+}
+
+test('WebGL 成功時使用 webgl 後端、不啟動 2D 迴圈，並轉送姿勢狀態', () => {
+  const { s, calls, win } = mandalaRig();
+  assert.equal(s.getSceneBackend(), null);
+  s.mountScene();
+  assert.equal(s.getSceneBackend(), 'webgl');
+  assert.equal(win.raf, 0);
+  assert.ok(!calls.includes('ctx:2d'));
+  s.setWorship('ask');
+  s.setWorship('reveal');
+  s.setWorship('reset');
+  s.calm();
+  assert.deepEqual(calls.filter((c) => c.startsWith('state:')), ['state:idle', 'state:bow', 'state:raise', 'state:idle', 'state:still']);
+  s.unmountScene();
+  assert.ok(calls.includes('destroy'));
+  assert.equal(s.getSceneBackend(), null);
+});
+
+test('createMandala 回 null 時退回 2D 後備', () => {
+  const { s, calls, win } = mandalaRig({ result: 'null' });
+  s.mountScene();
+  assert.equal(s.getSceneBackend(), 'canvas2d');
+  assert.ok(calls.includes('ctx:2d'));
+  assert.equal(win.raf, 1);
+  s.unmountScene();
+});
+
+test('執行期 onFail 也退回 2D 並銷毀 mandala', () => {
+  const { s, calls, getOpts } = mandalaRig();
+  s.mountScene();
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (...a) => warned.push(a.join(' '));
+  try { getOpts().onFail('webgl context lost'); } finally { console.warn = warn; }
+  assert.equal(warned.length, 1);
+  assert.equal(s.getSceneBackend(), 'canvas2d');
+  assert.ok(calls.includes('destroy'));
+  s.unmountScene();
+});
+
+test('pulse：webgl 轉送；reducedMotion 時不呼叫 mandala', () => {
+  const a = mandalaRig();
+  a.s.mountScene(); a.s.pulse();
+  assert.ok(a.calls.includes('pulse'));
+  const b = mandalaRig({ reducedMotion: true });
+  b.s.mountScene(); b.s.pulse();
+  assert.ok(!b.calls.includes('pulse'));
+  assert.equal(b.getOpts().reducedMotion, true);
+});
+
+test('晚於 mountScene 的 setWorship 之前已設的狀態會在掛載時帶入', () => {
+  const { s, calls } = mandalaRig();
+  s.setWorship('crisis');
+  s.mountScene();
+  assert.deepEqual(calls.filter((c) => c.startsWith('state:')), ['state:still']);
+});
