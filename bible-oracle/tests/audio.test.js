@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUTE_FADE_SEC, midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC } from '../assets/audio.js';
+import { MUTE_FADE_SEC, midiToFreq, CHORDS, PROGRESSION, chordAt, createMuteStore, createAudio, MASTER_LEVEL, CHORD_SEC, HUSH_LEVEL, TOLL_MIN_SEC, TOLL_MAX_SEC, TOLL_LEVEL, BELL_LEVEL } from '../assets/audio.js';
 
 test('midiToFreq', () => {
   assert.equal(midiToFreq(69), 440);
@@ -9,15 +9,15 @@ test('midiToFreq', () => {
 
 test('和弦音高都在合理音域，且至少有四個聲部', () => {
   for (const chord of CHORDS) {
-    assert.ok(chord.bass >= 28 && chord.bass <= 48);
+    assert.ok(chord.bass >= 24 && chord.bass <= 40);
     assert.ok(chord.voices.length >= 4);
-    for (const v of chord.voices) assert.ok(v >= 50 && v <= 76);
+    for (const v of chord.voices) assert.ok(v >= 40 && v <= 64);
   }
 });
 
-test('進行為 Dm Bb F C Dm Gm Bb C 並可循環', () => {
+test('進行為 Dm Bb Gm Dm Am Bb Gm A 並可循環', () => {
   const names = PROGRESSION.map((i) => CHORDS[i].name);
-  assert.deepEqual(names, ['Dm', 'Bb', 'F', 'C', 'Dm', 'Gm', 'Bb', 'C']);
+  assert.deepEqual(names, ['Dm', 'Bb', 'Gm', 'Dm', 'Am', 'Bb', 'Gm', 'A']);
   assert.equal(chordAt(8), chordAt(0));
   assert.equal(chordAt(9), chordAt(1));
 });
@@ -73,7 +73,7 @@ class FakeNode {
   stop() { this.stopped = true; this.stopCalls++; }
 }
 
-function makeFakeCtx({ rejectResume = false, hold = false } = {}) {
+function makeFakeCtx({ rejectResume = false, hold = false, pending = false } = {}) {
   const created = [];
   class FakeAudioContext {
     constructor() {
@@ -85,7 +85,10 @@ function makeFakeCtx({ rejectResume = false, hold = false } = {}) {
       this.nodes = [];
       this.resumeCalls = 0;
       this.buffers = 0;
+      this.listeners = [];
     }
+    addEventListener(type, fn) { if (type === 'statechange') this.listeners.push(fn); }
+    setState(s) { this.state = s; this.listeners.forEach((fn) => fn({ type: 'statechange' })); }
     make(kind) {
       const n = new FakeNode(kind);
       if (hold) n.gain.cancelAndHoldAtTime = function (t) { return this.record('cancelAndHoldAtTime', undefined, t); };
@@ -100,7 +103,7 @@ function makeFakeCtx({ rejectResume = false, hold = false } = {}) {
       this.buffers++;
       return { numberOfChannels: ch, length: len, getChannelData: () => new Float32Array(len) };
     }
-    resume() { this.resumeCalls++; if (rejectResume) return Promise.reject(new Error('blocked')); this.state = 'running'; return Promise.resolve(); }
+    resume() { this.resumeCalls++; if (pending) return new Promise(() => {}); if (rejectResume) return Promise.reject(new Error('blocked')); this.state = 'running'; return Promise.resolve(); }
     close() { this.closeCalls = (this.closeCalls || 0) + 1; this.state = 'closed'; return Promise.resolve(); }
     count(kind) { return this.nodes.filter((n) => n.kind === kind).length; }
     master() { return this.nodes.find((n) => n.kind === 'gain' && n.connections.includes(this.destination)); }
@@ -126,12 +129,12 @@ function makeTimers() {
   };
 }
 
-function setup({ muted = false, ...fakeOpts } = {}) {
+function setup({ muted = false, random = () => 0, ...fakeOpts } = {}) {
   const { FakeAudioContext, created } = makeFakeCtx(fakeOpts);
   const timers = makeTimers();
   const data = new Map(muted ? [['sanctuary-muted', '1']] : []);
   const storage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) };
-  const audio = createAudio({ AudioContextCtor: FakeAudioContext, storage, setTimer: timers.setTimer, clearTimer: timers.clearTimer });
+  const audio = createAudio({ AudioContextCtor: FakeAudioContext, storage, setTimer: timers.setTimer, clearTimer: timers.clearTimer, random });
   return { audio, created, timers, data, ctx: () => created[0] };
 }
 
@@ -324,21 +327,155 @@ test('鐘聲最小間隔：1.5 秒內重複呼叫被忽略', () => {
   assert.ok(ctx().count('oscillator') > n);
 });
 
-test('resume() 被拒絕時不會一直排程換和弦，之後 start() 可重試', async () => {
+test('resume() 被拒絕時保留節點圖、不拆除，下次 start() 會再嘗試 resume', async () => {
   const { audio, timers, created } = setup({ rejectResume: true });
   audio.start();
   await new Promise((r) => setImmediate(r));
-  assert.equal(timers.size, 0);
-  assert.equal(created[0].closeCalls, 1);
+  assert.equal(created.length, 1);
+  assert.equal(created[0].closeCalls || 0, 0);
+  assert.ok(timers.size >= 1);
   assert.doesNotThrow(() => audio.bell());
+  const oscs = created[0].count('oscillator');
+  const calls = created[0].resumeCalls;
   audio.start();
-  assert.equal(created.length, 2);
+  assert.equal(created.length, 1);
+  assert.equal(created[0].resumeCalls, calls + 1);
+  assert.equal(created[0].count('oscillator'), oscs);
+  assert.equal(audio.state(), 'blocked');
+});
+
+test('suspended（resume 一直 pending）時 start() 不拆除；每次 start() 都呼叫 resume', () => {
+  const { audio, created, ctx } = setup({ pending: true });
+  audio.start();
+  audio.start();
+  audio.start();
+  assert.equal(created.length, 1);
+  assert.equal(ctx().resumeCalls, 3);
+  assert.equal(ctx().closeCalls || 0, 0);
+  assert.equal(audio.state(), 'suspended');
+  assert.ok(ctx().count('oscillator') > 0);
+});
+
+test('state()：不可用、未啟動、running、blocked', async () => {
+  assert.equal(createAudio({ AudioContextCtor: null }).state(), 'unavailable');
+  const a = setup();
+  assert.equal(a.audio.state(), 'suspended');
+  a.audio.start();
+  assert.equal(a.audio.state(), 'running');
+  const b = setup({ rejectResume: true });
+  b.audio.start();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(b.audio.state(), 'blocked');
+});
+
+test('onStateChange：轉發 statechange、可取消；start() 之前註冊也會生效', async () => {
+  const { audio, ctx } = setup({ pending: true });
+  const seen = [];
+  const off = audio.onStateChange((s) => seen.push(s));
+  assert.equal(typeof off, 'function');
+  audio.start();
+  ctx().setState('running');
+  assert.deepEqual(seen, ['running']);
+  ctx().setState('suspended');
+  assert.deepEqual(seen, ['running', 'suspended']);
+  off();
+  ctx().setState('running');
+  assert.equal(seen.length, 2);
+  const none = createAudio({ AudioContextCtor: null });
+  assert.equal(typeof none.onStateChange(() => {}), 'function');
+});
+
+test('resume 被拒時通知 blocked，之後恢復通知 running', async () => {
+  const { audio, ctx } = setup({ rejectResume: true });
+  const seen = [];
+  audio.onStateChange((s) => seen.push(s));
+  audio.start();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(seen, ['blocked']);
+  ctx().setState('running');
+  assert.equal(audio.state(), 'running');
+});
+
+test('hush 位準小但可聽（0 < HUSH <= 0.1）並實際套用', () => {
+  assert.ok(HUSH_LEVEL > 0 && HUSH_LEVEL <= 0.1);
+  const { audio, ctx } = setup();
+  audio.start();
+  audio.hush(true);
+  assert.equal(ctx().master().gain.targets.at(-1), HUSH_LEVEL);
+});
+
+// ---- 遠鐘 ----
+
+test('遠鐘：隨機間隔 30..45 秒（rng 注入），低沉、音量約 BELL_LEVEL*0.7', () => {
+  assert.equal(TOLL_MIN_SEC, 30);
+  assert.equal(TOLL_MAX_SEC, 45);
+  assert.ok(Math.abs(TOLL_LEVEL - BELL_LEVEL * 0.7) < 1e-9);
+  const lo = setup({ random: () => 0 });
+  lo.audio.start();
+  const base = lo.ctx().nodes.length;
+  lo.timers.advance(29900);
+  assert.equal(lo.ctx().nodes.length, base);
+  lo.timers.advance(200);
+  const added = lo.ctx().nodes.slice(base);
+  const oscs = added.filter((n) => n.kind === 'oscillator');
+  assert.ok(oscs.length > 0);
+  const peaks = added.filter((n) => n.kind === 'gain').map((g) => Math.max(...g.gain.targets));
+  assert.ok(Math.max(...peaks) <= TOLL_LEVEL + 1e-9);
+  assert.ok(Math.min(...oscs.map((o) => o.frequency.targets[0])) < midiToFreq(chordAt(0).voices[1] + 12));
+  const hi = setup({ random: () => 1 });
+  hi.audio.start();
+  const b2 = hi.ctx().nodes.length;
+  hi.timers.advance(44900);
+  assert.equal(hi.ctx().nodes.length, b2);
+  hi.timers.advance(200);
+  assert.ok(hi.ctx().nodes.length > b2);
+});
+
+test('遠鐘持續排程；muted／hush 時略過但仍排下一次', () => {
+  const { audio, timers, ctx } = setup({ random: () => 0 });
+  audio.start();
+  const n0 = ctx().count('oscillator');
+  timers.advance(30000);
+  const n1 = ctx().count('oscillator');
+  assert.ok(n1 > n0);
+  audio.setMuted(true);
+  timers.advance(30000);
+  assert.equal(ctx().count('oscillator'), n1);
+  audio.setMuted(false);
+  audio.hush(true);
+  timers.advance(30000);
+  assert.equal(ctx().count('oscillator'), n1);
+  audio.hush(false);
+  timers.advance(30000);
+  assert.ok(ctx().count('oscillator') > n1);
+});
+
+test('遠鐘在 context 尚未 running 時略過；stop() 後清除計時器不再響', () => {
+  const p = setup({ pending: true, random: () => 0 });
+  p.audio.start();
+  const n = p.ctx().count('oscillator');
+  p.timers.advance(90000);
+  assert.equal(p.ctx().count('oscillator'), n);
+  const { audio, timers, ctx } = setup({ random: () => 0 });
+  audio.start();
+  audio.stop();
+  const count = ctx().nodes.length;
+  timers.advance(300000);
+  assert.equal(ctx().nodes.length, count);
+  assert.equal(timers.size, 0);
+});
+
+test('有持續的 sub drone（低於 40Hz 的 sine）', () => {
+  const { audio, ctx } = setup();
+  audio.start();
+  const subs = ctx().nodes.filter((n) => n.kind === 'oscillator' && n.frequency.targets[0] < 40);
+  assert.ok(subs.length >= 1);
 });
 
 test('context 已關閉時，換和弦計時器不再重排', () => {
   const { audio, timers, ctx } = setup();
   audio.start();
   ctx().close();
-  timers.advance(CHORD_SEC * 1000 + 10);
+  timers.advance(CHORD_SEC * 1000 + 100000);
   assert.equal(timers.size, 0);
 });
