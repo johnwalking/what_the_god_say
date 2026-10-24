@@ -48,10 +48,12 @@ const el = {
   quip: document.querySelector('#quip'),
   again: document.querySelector('#again'),
   save: document.querySelector('#save'),
-  gate: document.querySelector('#gate'),
-  enterSound: document.querySelector('#enter-sound'),
-  enterSilent: document.querySelector('#enter-silent'),
   mute: document.querySelector('#mute'),
+  cross: document.querySelector('#cross'),
+  crossHint: document.querySelector('#cross-hint'),
+  dialog: document.querySelector('#ask-dialog'),
+  close: document.querySelector('#close-dialog'),
+  hint: document.querySelector('#hint'),
 };
 
 /** 取 localStorage 本身就可能拋錯（禁用 cookie、隱私模式），所以包起來。 */
@@ -63,21 +65,10 @@ function 取儲存() {
   }
 }
 
-/**
- * 靜默進入只是「這次不放音樂」，不該蓋掉使用者存下的靜音偏好：
- * 暫停期間 setItem 不寫入，之後使用者自己按靜音鍵才會存。
- */
-let 暫停寫入 = false;
-const 底層儲存 = 取儲存();
-const 儲存 = 底層儲存 && {
-  getItem: (key) => 底層儲存.getItem(key),
-  setItem: (key, value) => { if (!暫停寫入) 底層儲存.setItem(key, value); },
-};
-
 const sanctuary = createSanctuary({
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 });
-const audio = createAudio({ storage: 儲存 });
+const audio = createAudio({ storage: 取儲存() });
 
 let data = null;
 let 目前的問題 = '';
@@ -149,15 +140,18 @@ function render(result, question) {
   el.quip.textContent = result.quip;
   el.answer.hidden = false;
   el.again.hidden = result.poolSize <= 1;
-  // 經文文字交給儀式逐字浮現；一併響鐘
+  // 經文文字交給儀式逐字浮現；鐘聲只在音樂已在播放時響
+  // （suspended 的 context 上 bell() 會排隊，等恢復時才突然響起）
   sanctuary.reveal({ verseEl: el.verse, refEl: el.ref, quipEl: el.quip, text: result.text, kind: result.kind });
-  audio.bell();
+  sanctuary.setWorship('reveal');
+  if (audio.state() === 'running') audio.bell();
 }
 
 /** 危機訊息：只留關懷文字，儀式全停、配樂收到近乎無聲。 */
 function showCare(message) {
   sanctuary.setBusy(false);
   sanctuary.calm();
+  sanctuary.setWorship('crisis');
   audio.hush(true);
   showNotice(message);
 }
@@ -195,6 +189,7 @@ async function ask(question, n) {
   }
   // 此時還不知道後端會不會判定為危機，儀式（閃光、配樂回升）等結果出來再開始
   sanctuary.setBusy(true);
+  sanctuary.setWorship('ask');
   showNotice('求問中⋯');
 
   try {
@@ -246,6 +241,41 @@ el.form.addEventListener('submit', (event) => {
   ask(question, 0);
 });
 
+/** 對話框開啟過一次後，「點擊這裡」提示淡出且不再出現（只存記憶體）。 */
+let 提示已退 = false;
+function hideCrossHint() {
+  if (提示已退) return;
+  提示已退 = true;
+  el.crossHint.classList.add('fade');
+  setTimeout(() => { el.crossHint.hidden = true; }, 700);
+}
+
+function openDialog() {
+  if (!el.dialog.open) el.dialog.showModal();
+  sanctuary.setWorship('ask');
+  hideCrossHint();
+  if (el.answer.hidden) el.input.focus(); // 已有答案時維持焦點不動
+}
+
+function closeDialog() {
+  if (el.dialog.open) el.dialog.close();
+}
+
+el.cross.addEventListener('click', () => {
+  audio.start(); // 同一個手勢內啟動音樂
+  openDialog();
+});
+
+el.close.addEventListener('click', closeDialog);
+
+// Esc、關閉鈕與 close() 都會觸發 close 事件
+el.dialog.addEventListener('close', () => {
+  ++請求序號; // 作廢還在路上的請求，避免對話框關著卻開始儀式
+  sanctuary.setBusy(false);
+  sanctuary.setWorship('reset');
+  el.cross.focus();
+});
+
 el.again.addEventListener('click', () => {
   ask(目前的問題, 目前的位移 + 1);
 });
@@ -282,54 +312,44 @@ function syncMute() {
   el.mute.setAttribute('aria-label', muted ? '開啟聲音' : '靜音');
 }
 
-/** 帶 ?q= 的分享連結：入口開了才作答。 */
-let 待答 = null;
-let 已入場 = false;
-
-function enter() {
-  if (已入場) return;
-  已入場 = true;
-  // 待答的提問要等 main 解除 inert 後才送，live region 與焦點才會正確
-  sanctuary.openGate(() => {
-    if (!待答) return;
-    const { question, n } = 待答;
-    待答 = null;
-    ask(question, n);
-  });
-  syncMute();
-}
-
-el.enterSound.addEventListener('click', () => {
-  audio.start(); // 必須在使用者手勢內同步呼叫，否則瀏覽器不放行
-  enter();
-});
-
-el.enterSilent.addEventListener('click', () => {
-  // 不啟動音樂；靜音只對這次有效，不覆寫存下的偏好
-  暫停寫入 = true;
-  try { audio.setMuted(true); } finally { 暫停寫入 = false; }
-  enter();
-});
-
 el.mute.addEventListener('click', () => {
   const muted = !audio.isMuted();
   audio.setMuted(muted);
-  // 靜默進入後第一次取消靜音：這是使用者手勢，此時才啟動音樂
-  // start() 冪等且會恢復被暫停的 context，失敗後也能重試
+  // 取消靜音是使用者手勢；start() 冪等，也能在先前被擋住後重試
   if (!muted) audio.start();
   syncMute();
 });
 
-window.__sanctuaryReady = true; // index.html 的後備腳本據此判斷 app.js 有沒有跑起來
-sanctuary.mountWindow();
+/** 音樂：載入即嘗試；被瀏覽器擋下就提示，並在第一次互動時啟動。 */
+const 互動事件 = ['pointerdown', 'keydown', 'touchstart', 'click'];
+function 啟動音樂() {
+  audio.start();
+}
+function syncMusicHint() {
+  const running = audio.state() === 'running';
+  el.hint.hidden = running || audio.available === false;
+  if (running) for (const type of 互動事件) window.removeEventListener(type, 啟動音樂, true);
+}
+audio.onStateChange(syncMusicHint);
+audio.start();
+syncMute();
+syncMusicHint();
+if (audio.state() !== 'running' && audio.available !== false) {
+  for (const type of 互動事件) window.addEventListener(type, 啟動音樂, { capture: true });
+}
+
+window.__sanctuaryReady = true;
+sanctuary.mountScene();
 sanctuary.startDust();
-sanctuary.focusGate();
+sanctuary.setWorship('load');
 
 data = await loadData();
 
 const 來自網址 = readURL();
 if (來自網址.question) {
   el.input.value = 來自網址.question;
-  if (已入場) ask(來自網址.question, 來自網址.n);
-  else 待答 = { question: 來自網址.question, n: 來自網址.n };
+  openDialog();
+  await ask(來自網址.question, 來自網址.n);
+  // dialog 不是 inert 區域：把焦點交給 #notice，關懷訊息才會被播報
+  if (!el.notice.hidden && el.answer.hidden) el.notice.focus();
 }
