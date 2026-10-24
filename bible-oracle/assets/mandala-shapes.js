@@ -12,19 +12,18 @@ export const HIP = Object.freeze([0, 1.6, 0]);      // 頭與上身前傾（鞠�
 
 const TAU = Math.PI * 2;
 
-// 門徒比例（單位：與十字架高 10 成比例，身高約 4.3）
-const ROBE_LAYERS = [           // [y 底, 高, x 深, z 寬]，下寬上窄（五層）
-  [0.00, 0.70, 1.55, 1.95],     // 袍襬
-  [0.70, 0.70, 1.30, 1.60],
-  [1.40, 0.70, 1.12, 1.35],
-  [2.10, 0.70, 1.00, 1.15],
-  [2.80, 0.30, 0.92, 1.05],     // 胸
-];
-const SHOULDER_BOX = [2.95, 0.35, 0.85, 1.40]; // 略凸的肩線 [y 底, 高, x 深, z 寬]
-const HEAD_SIZE = 0.5;          // 頭方塊邊長（被兜帽包住、凹在罩內）
-const HOOD_SIZE = [1.0, 0.9, 0.95]; // 兜帽主體 x/y/z（比頭大）
-const HOOD_Y = 3.7;           // 兜帽中心高度
-const COWL_DEPTH = 0.4;         // 深色兜帽罩向前（-x）突出的長度
+// 門徒比例（單位：與十字架高 10 成比例，身高約 4.4）。方塊以 [x0,x1, y0,y1, 半寬 z] 表示（z 對稱）
+// 剪影：斗篷呈錐形（袍襬遠寬於肩）→ 斜披肩 → 圓兜帽；以多層小級差方塊近似錐面
+const CLOAK_LAYERS = 10;         // 斗篷層數
+const CLOAK_TOP = 3.16;          // 斗篷頂（肩）高度
+const CLOAK_HEM = [-0.78, 0.84, 1.04]; // 袍襬 [前 x, 後 x, 半寬 z]
+const CLOAK_SHOULDER = [-0.36, 0.44, 0.64]; // 肩 [前 x, 後 x, 半寬 z]
+const MANTLE = [-0.34, 0.42, 3.1, 3.42, 0.5]; // 斜披肩（肩到兜帽的過渡）
+const BACK_DRAPE = [0.40, 0.62, 1.60, 3.10, 0.46]; // 背後垂墜
+const HOOD_Y = 3.32;            // 兜帽底緣高度
+const HOOD_H = 1.0;             // 兜帽高度
+const HOOD_HALF_W = 0.42;       // 兜帽半寬（z）
+const FACE_RECESS = 0.24;       // 臉凹在兜帽開口內的深度（shader 將臉面塗黑）
 
 export class Builder {
   constructor() {
@@ -67,40 +66,41 @@ export class Builder {
   }
 }
 
-// 兜帽長袍人形：高約 4.3，面朝 -x，腳底中央為原點
+// 兜帽長袍人形：高約 4.4，面朝 -x，腳底中央為原點。
+// 剪影重點：錐形斗篷（袍襬遠寬於肩）、斜披肩、比頭大的圓兜帽、凹陷塗黑的臉、袖中合攏於胸前的雙手。
 export function buildDisciple(opts = {}) {
   const variant = ((opts.variant ?? 0) % 3 + 3) % 3;
-  const wk = 1 + 0.07 * variant;       // 長袍寬度係數
-  const hk = 1 + 0.06 * (variant - 1); // 兜帽大小係數
+  const wk = 1 + 0.06 * variant;       // 長袍寬度係數
+  const hk = 1 + 0.05 * (variant - 1); // 兜帽大小係數
   const b = new Builder();
+  const ext = (x0, x1, y0, y1, hz, part, cz = 0) => b.box((x0 + x1) / 2, (y0 + y1) / 2, cz, x1 - x0, y1 - y0, hz * 2, part);
 
-  // 長袍：疊放方塊，下寬上窄
-  for (const [y, h, dx, dz] of ROBE_LAYERS) b.box(0.05, y + h / 2, 0, dx * wk, h, dz * wk, PART.BODY);
-  // 後擺（長袍後方較長的垂墜，讓側影下寬）
-  b.box(0.55 * wk, 0.9, 0, 0.5, 1.8, 1.3 * wk, PART.BODY);
-  // 肩線
-  const [sy, sh, sdx, sdz] = SHOULDER_BOX;
-  b.box(0.08, sy + sh / 2, 0, sdx, sh, sdz * wk, PART.BODY);
-  // 頸（被兜帽遮住，僅填縫）
-  b.box(0.05, 3.5, 0, 0.5, 0.2, 0.55, PART.BODY);
-
-  // 兜帽：凹陷的頭 + 較大的兜帽主體 + 向前突出的深色罩 + 後傾的階梯尖頂 + 披肩領與背後垂尾
-  const [hx, hy, hz] = HOOD_SIZE;
-  const top = HOOD_Y + hy * hk / 2;
-  b.box(0.02, HOOD_Y - 0.05, 0, HEAD_SIZE, HEAD_SIZE, HEAD_SIZE, PART.HEAD);
-  b.box(0.12, HOOD_Y, 0, hx * hk, hy * hk, hz * hk, PART.HEAD);
-  b.box(0.12 - hx * hk / 2 - COWL_DEPTH / 2 + 0.12, HOOD_Y - 0.08, 0, COWL_DEPTH, hy * hk * 0.8, hz * hk * 0.86, PART.HEAD);
-  b.box(0.22, top + 0.08, 0, hx * hk * 0.7, 0.16, hz * hk * 0.7, PART.HEAD);
-  b.box(0.32, top + 0.2, 0, hx * hk * 0.4, 0.12, hz * hk * 0.4, PART.HEAD);
-  b.box(0.1, 3.33, 0, 1.15, 0.3, 1.25 * wk, PART.HEAD);
-  b.box(0.52, HOOD_Y - 0.6 * hk, 0, 0.4, 1.0, 0.8 * hz * hk, PART.HEAD);
-
-  // 雙臂：寬袖上臂自肩下垂，前臂向前向內，雙手於胸前相合
-  for (const side of [-1, 1]) {
-    b.box(-0.1, 2.65, side * 0.74 * wk, 0.38, 1.0, 0.4, PART.ARM);        // 上臂（袖）
-    b.box(-0.58, 2.3, side * 0.3, 0.9, 0.3, 0.32, PART.ARM);                 // 前臂（朝 -x，漸向中線）
+  // 長袍與背後垂墜（BODY）
+  for (let i = 0; i < CLOAK_LAYERS; i++) {
+    const t = i / (CLOAK_LAYERS - 1), ya = CLOAK_TOP * i / CLOAK_LAYERS, yb = CLOAK_TOP * (i + 1) / CLOAK_LAYERS;
+    const L = (k) => CLOAK_HEM[k] + (CLOAK_SHOULDER[k] - CLOAK_HEM[k]) * t;
+    ext(L(0) * wk, L(1) * wk, ya, yb, L(2) * wk, PART.BODY);
   }
-  b.box(-1.08, 2.3, 0, 0.2, 0.32, 0.3, PART.ARM);                            // 相合的雙手
+  ext(MANTLE[0], MANTLE[1], MANTLE[2], MANTLE[3], MANTLE[4] * wk, PART.BODY);
+  ext(BACK_DRAPE[0] * wk, BACK_DRAPE[1] * wk, BACK_DRAPE[2], BACK_DRAPE[3], BACK_DRAPE[4] * wk, PART.BODY);
+
+  // 兜帽（HEAD）：後殼、頂蓋（兩級，讓頂部圓）、兩側罩片、前緣帽簷、垂到背上的帽尾；臉凹在開口內
+  const y0 = HOOD_Y, y1 = HOOD_Y + HOOD_H * hk, hw = HOOD_HALF_W * hk, front = -0.5 * hk;
+  ext(front + FACE_RECESS, 0.1, y0 + 0.1, y1 - 0.3, hw - 0.1, PART.HEAD);    // 臉（凹）
+  ext(-0.08, 0.5 * hk, y0, y1 - 0.12, hw, PART.HEAD);                         // 後殼
+  ext(front + 0.04, 0.42 * hk, y1 - 0.3, y1 - 0.08, hw - 0.03, PART.HEAD);    // 頂蓋
+  ext(front + 0.14, 0.3 * hk, y1 - 0.1, y1, hw - 0.14, PART.HEAD);            // 頂蓋上層（收圓）
+  for (const side of [-1, 1]) ext(front, 0.0, y0 + 0.02, y1 - 0.24, 0.07, PART.HEAD, side * (hw - 0.07)); // 側罩
+  ext(front - 0.05, front + 0.1, y1 - 0.34, y1 - 0.14, hw - 0.04, PART.HEAD); // 帽簷
+  ext(0.4 * hk, 0.64 * hk, 2.9, y0 + 0.5, 0.3 * hk, PART.HEAD);               // 帽尾
+
+  // 雙臂（ARM）：寬袖自肩下垂，前臂向前向內，袖口合攏於胸前，雙手藏在袖中
+  for (const side of [-1, 1]) {
+    ext(-0.34, 0.14, 2.2, 3.12, 0.17, PART.ARM, side * 0.68 * wk); // 上臂（垂袖）
+    ext(-0.86, -0.3, 2.18, 2.62, 0.19, PART.ARM, side * 0.44 * wk); // 前臂（袖）
+    ext(-1.04, -0.78, 2.1, 2.7, 0.2, PART.ARM, side * 0.22);        // 喇叭袖口
+    ext(-1.1, -0.98, 2.24, 2.52, 0.06, PART.ARM, side * 0.08);      // 手（左右各一，合於中線；shader 依 z 正負分左右臂）
+  }
   return b;
 }
 
