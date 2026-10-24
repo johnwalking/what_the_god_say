@@ -21,6 +21,7 @@
 - 門徒共 12 位，分 3 層軌道（內 3、中 4、外 5，或你認為視覺更好的 12 位分配），各層半徑遞增、速度不同、交替方向；遠處較小較暗、近處較大較亮；剪影為帶兜帽的長袍人形，近黑色，細金邊（rgba 金色，隨深度變淡）；姿勢：`idle`（雙手下垂合十）、`bow`（低頭前傾）、`raise`（雙手高舉）、`still`（低頭靜止）。
 - 狀態對應：`load/reset → idle`（約 0.04 rad/s 基準軌道速度）；`ask → bow`（速度 ×0.25）；`reveal → raise`（速度 ×1.8，十字架光暈增亮，持續到下一次提問或關閉）；`crisis → still`（速度 0、姿勢低頭、不增亮）；對話框關閉 → `idle`。
 - 互動：拖曳（Pointer Events）旋轉視角（yaw 無限、pitch 限制在約 0.15–1.0 rad）；滾輪與雙指縮放（zoom 限制約 0.6–1.8）；拖曳超過約 6px 不視為點擊；放開後 yaw 帶輕微慣性衰減。`prefers-reduced-motion`：不自動旋轉（yaw 固定）、不慣性、不灰塵；門徒仍依狀態切換姿勢（無過渡）；仍可手動拖曳。
+- 借用自參考頁（`tunnel.html`／`controls.js`，僅行為層面，不引入 three.js／tweakpane）：(1) **自動環繞**：閒置時視角（yaw）持續緩慢自轉，使用者拖曳後暫停，閒置約 4 秒（`IDLE_DELAY_SEC`）後平順恢復；(2) **空白鍵**暫停／繼續門徒轉動（`aria-live` 不需要，但鍵盤焦點在輸入框時不可攔截空白鍵）；(3) **旋渦感**：每層軌道的半徑隨相位有極小幅度的正弦起伏（`SWIRL` 常數，約 0.04–0.08 的相對幅度），讓軌跡略呈螺旋而非正圓；(4) **霧距**：越遠越暗越淡（已由 depth→alpha 表達，另加一個 `FOG` 常數控制遠處衰減強度）；(5) 這些可調參數集中在 `sanctuary.js` 檔頭的具名常數，每個一行註解。
 - 畫布效能：`devicePixelRatio` 上限 2；`requestAnimationFrame`，`document.hidden` 時暫停；resize 重算；不使用 `filter`；每幀只畫 12 位門徒與十字架。手機（<600px）縮小半徑使整體在 390px 寬內；`scrollWidth == clientWidth`。
 - 保留既有行為：`npm test`、`.venv/bin/pytest -q`（220）、靜態模式與 API 模式、`match.js` 前端安全閘、`card.js`（卡片）不改。
 - 不改 `server/`、`match.js`、`card.js`、`audio.js`。commit 訊息結尾加：`Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`；絕不 `git add -A`（根目錄有未追蹤的 `主的旨意-技術筆記.md`，不可加入）；不新增計畫未列出的檔案。
