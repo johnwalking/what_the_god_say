@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, roseWindowSVG, createSanctuary } from '../assets/sanctuary.js';
+import { splitGraphemes, revealSchedule, quipDelay, ceremonyFor, worshipLayout, worshipperSVG, congregationHTML, worshipState, createSanctuary } from '../assets/sanctuary.js';
 
 test('splitGraphemes 依碼點拆分且容忍空值', () => {
   assert.deepEqual(splitGraphemes('主的旨意'), ['主', '的', '旨', '意']);
@@ -36,14 +36,6 @@ test('危機訊息不得有儀式', () => {
   assert.deepEqual(ceremonyFor(undefined), { animate: true, bell: true, hush: false });
 });
 
-test('roseWindowSVG 產生內外兩圈花瓣與金色環', () => {
-  const svg = roseWindowSVG({ petals: 12, size: 400 });
-  assert.match(svg, /^<svg [^>]*viewBox="0 0 400 400"/);
-  assert.equal((svg.match(/<path /g) || []).length, 24);
-  assert.ok((svg.match(/<circle /g) || []).length >= 3);
-  assert.ok(svg.endsWith('</svg>'));
-});
-
 test('revealSchedule 200 字時 total 不超過 maxTotal（4.5）', () => {
   const { total } = revealSchedule('字'.repeat(200));
   assert.ok(total <= 4.5, `total=${total}`);
@@ -57,57 +49,105 @@ test('revealSchedule maxTotal 過小時延遲仍嚴格遞增且有限', () => {
   }
 });
 
-// ---- openGate：onOpen 與焦點（以最小的 DOM 替身驗證）----
-function fakeEl(id, extra = {}) {
-  const attrs = new Map();
+// ---- 教徒 ----
+test('worshipLayout 確定性、數量、兩排、範圍與間距', () => {
+  const a = worshipLayout();
+  assert.equal(a.length, 11);
+  assert.deepEqual(a, worshipLayout({ count: 11, seed: 7 }));
+  assert.notDeepEqual(a, worshipLayout({ seed: 8 }));
+  assert.ok(a.some((w) => w.row === 0) && a.some((w) => w.row === 1));
+  for (const w of a) {
+    assert.ok(w.x >= 0 && w.x <= 100, `x=${w.x}`);
+    assert.ok(w.scale >= 0.8 && w.scale <= 1.15, `scale=${w.scale}`);
+    assert.ok(w.delay >= 0 && w.delay <= 6, `delay=${w.delay}`);
+    assert.ok(w.row === 0 || w.row === 1);
+    assert.equal(typeof w.flip, 'boolean');
+  }
+  const xs = a.map((w) => w.x).sort((p, q) => p - q);
+  for (let i = 1; i < xs.length; i += 1) assert.ok(xs[i] - xs[i - 1] >= 4, `gap ${xs[i - 1]}→${xs[i]}`);
+});
+
+test('worshipLayout 其他數量與 seed 仍符合約束', () => {
+  for (const count of [1, 6, 14]) {
+    for (const seed of [1, 7, 99, 12345]) {
+      const l = worshipLayout({ count, seed });
+      assert.equal(l.length, count);
+      const xs = l.map((w) => w.x).sort((p, q) => p - q);
+      for (let i = 1; i < xs.length; i += 1) assert.ok(xs[i] - xs[i - 1] >= 4);
+    }
+  }
+});
+
+test('worshipperSVG 含四組可選取的 g 與 currentColor', () => {
+  const svg = worshipperSVG();
+  assert.match(svg, /^<svg /);
+  for (const c of ['w-head', 'w-torso', 'w-arms-down', 'w-arms-up']) {
+    assert.equal((svg.match(new RegExp(`<g class="${c}"`, 'g')) || []).length, 1, c);
+  }
+  assert.match(svg, /currentColor/);
+  assert.ok(svg.endsWith('</svg>'));
+});
+
+test('congregationHTML 元素數量等於 layout 長度，flip 加 class', () => {
+  const layout = [
+    { x: 10, scale: 1, row: 0, delay: 1.5, flip: false },
+    { x: 50, scale: 0.9, row: 1, delay: 0, flip: true },
+  ];
+  const html = congregationHTML(layout);
+  assert.equal((html.match(/<div class="worshipper/g) || []).length, 2);
+  assert.equal((html.match(/class="worshipper flip"/g) || []).length, 1);
+  assert.match(html, /--x:10%;--s:1;--d:1.5s/);
+  assert.match(html, /data-row="1"/);
+  assert.equal(congregationHTML([]), '');
+});
+
+test('worshipState 對應事件', () => {
+  assert.equal(worshipState('load'), 'idle');
+  assert.equal(worshipState('ask'), 'bow');
+  assert.equal(worshipState('reveal'), 'raise');
+  assert.equal(worshipState('crisis'), 'still');
+  assert.equal(worshipState('reset'), 'idle');
+  assert.equal(worshipState('???'), 'idle');
+  assert.equal(worshipState(undefined), 'idle');
+});
+
+// ---- 控制器（最小 DOM 替身）----
+function fakeEl(id) {
   const classes = new Set();
+  const attrs = new Map();
   return {
-    id, hidden: false, textContent: '', focused: false, ...extra,
+    id, innerHTML: '', textContent: '',
     classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
     setAttribute: (k, v) => attrs.set(k, v),
-    removeAttribute(k) { attrs.delete(k); },
-    hasAttribute: (k) => attrs.has(k),
-    focus() { this.focused = true; },
+    getAttribute: (k) => attrs.get(k) ?? null,
+    dataset: {},
   };
 }
 function fakeRoot() {
-  const els = Object.fromEntries(['gate', 'mute', 'question', 'notice'].map((i) => [i, fakeEl(i)]));
-  const main = fakeEl('main');
-  const body = fakeEl('body');
-  const root = {
-    nodeType: 9, body, defaultView: globalThis,
-    getElementById: (id) => els[id] ?? null,
-    querySelector: (sel) => (sel === 'main.page' ? main : null),
-    querySelectorAll: () => [],
-  };
-  return { root, els, main };
+  const els = Object.fromEntries(['congregation', 'beams', 'notice'].map((i) => [i, fakeEl(i)]));
+  const root = { nodeType: 9, getElementById: (id) => els[id] ?? null, querySelector: () => null, querySelectorAll: () => [] };
+  return { root, els };
 }
 
-test('openGate：onOpen 在 inert 移除之後呼叫，可見的關懷訊息取得焦點', async () => {
-  const { root, els, main } = fakeRoot();
-  const s = createSanctuary({ root, reducedMotion: true });
-  assert.ok(main.hasAttribute('inert'));
-  let inertAtCall = null;
-  els.notice.hidden = true;
-  s.openGate(() => {
-    inertAtCall = main.hasAttribute('inert');
-    els.notice.textContent = '關懷';
-    els.notice.hidden = false;
-  });
-  await new Promise((r) => setTimeout(r, 1100));
-  assert.equal(inertAtCall, false);
-  assert.equal(els.notice.focused, true);
-  assert.equal(els.question.focused, false);
-  assert.equal(els.notice.textContent, '關懷');
-});
-
-test('openGate：沒有可見訊息或訊息在忙時焦點給輸入框', async () => {
+test('mountCongregation 與 setWorship 設定狀態；calm 設為 still', () => {
   const { root, els } = fakeRoot();
   const s = createSanctuary({ root, reducedMotion: true });
-  els.notice.hidden = false;
-  els.notice.classList.add('busy');
-  s.openGate();
-  await new Promise((r) => setTimeout(r, 1100));
-  assert.equal(els.question.focused, true);
-  assert.equal(els.notice.focused, false);
+  s.mountCongregation();
+  assert.equal((els.congregation.innerHTML.match(/<div class="worshipper/g) || []).length, 11);
+  s.setWorship('ask');
+  assert.equal(els.congregation.getAttribute('data-state'), 'bow');
+  s.setWorship('reveal');
+  assert.equal(els.congregation.getAttribute('data-state'), 'raise');
+  s.setWorship('crisis');
+  assert.equal(els.congregation.getAttribute('data-state'), 'still');
+  s.setWorship('reset');
+  assert.equal(els.congregation.getAttribute('data-state'), 'idle');
+  s.calm();
+  assert.equal(els.congregation.getAttribute('data-state'), 'still');
+});
+
+test('缺少元素時控制器不丟錯', () => {
+  const root = { nodeType: 9, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] };
+  const s = createSanctuary({ root, reducedMotion: true });
+  s.mountCongregation(); s.setWorship('ask'); s.pulse(); s.calm(); s.setBusy(true);
 });

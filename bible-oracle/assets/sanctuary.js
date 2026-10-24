@@ -1,5 +1,5 @@
 /**
- * 聖殿的視覺：純函式（可在 node 下測試）加 DOM 控制器（Task 3 加入）。
+ * 聖殿的視覺：純函式（可在 node 下測試）加 DOM 控制器。
  * 這個檔案的上半部不碰 DOM。
  */
 
@@ -34,46 +34,102 @@ export function ceremonyFor(kind) {
   return { animate: true, bell: true, hush: false };
 }
 
-const 玻璃色 = ['#7a1f2b', '#1f3a6b', '#c8a13a', '#2c6b4a', '#5b2a6b', '#a8432a'];
+// ---------------------------------------------------------------------------
+// 教徒：兩排跪拜剪影。以下皆為純函式，不碰 DOM。
+// ---------------------------------------------------------------------------
 
-function polar(c, r, a) {
-  return [c + r * Math.cos(a), c + r * Math.sin(a)];
+/** 簡單 LCG（Numerical Recipes 參數），回傳 [0,1) 的確定性亂數產生器。 */
+function lcg(seed) {
+  let state = (Number(seed) >>> 0) || 1;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
 }
 
-/** 環形扇面：外弧順時針、內弧逆時針封閉。 */
-function wedge(c, r0, r1, a0, a1) {
-  const f = (n) => n.toFixed(2);
-  const [x0, y0] = polar(c, r1, a0);
-  const [x1, y1] = polar(c, r1, a1);
-  const [x2, y2] = polar(c, r0, a1);
-  const [x3, y3] = polar(c, r0, a0);
-  return `M${f(x0)} ${f(y0)} A${f(r1)} ${f(r1)} 0 0 1 ${f(x1)} ${f(y1)} L${f(x2)} ${f(y2)} A${f(r0)} ${f(r0)} 0 0 0 ${f(x3)} ${f(y3)} Z`;
-}
+const round2 = (n) => Math.round(n * 100) / 100;
 
-/** 玫瑰窗：外圈大花瓣、內圈小花瓣、三道金環與中心圓。純字串，方便測試。 */
-export function roseWindowSVG({ petals = 12, size = 400 } = {}) {
-  const c = size / 2;
-  const step = (Math.PI * 2) / petals;
-  const gap = step * 0.06;
-  const paths = [];
-  for (let i = 0; i < petals; i += 1) {
-    const a0 = i * step + gap;
-    const a1 = (i + 1) * step - gap;
-    paths.push(`<path d="${wedge(c, c * 0.42, c * 0.92, a0, a1)}" fill="${玻璃色[i % 玻璃色.length]}"/>`);
-    paths.push(`<path d="${wedge(c, c * 0.12, c * 0.38, a0, a1)}" fill="${玻璃色[(i + 3) % 玻璃色.length]}"/>`);
+/**
+ * 排出教徒的位置：x（0–100 的百分比）沿畫面均分成 count 個槽再加確定性抖動，
+ * 抖動幅度受限，使任兩人相鄰 x 差 ≥ 4；奇偶交錯前後排（後排 row=0 較小、前排 row=1 較大）。
+ */
+export function worshipLayout({ count = 11, seed = 7 } = {}) {
+  const rand = lcg(seed);
+  const n = Math.max(0, Math.floor(count));
+  const slot = n > 0 ? 100 / n : 0;
+  const jitter = Math.max(0, Math.min(2.5, (slot - 4.2) / 2));
+  const list = [];
+  for (let i = 0; i < n; i += 1) {
+    const row = i % 2 === 0 ? 0 : 1;
+    const x = (i + 0.5) * slot + (rand() * 2 - 1) * jitter;
+    const scale = row === 0 ? 0.8 + rand() * 0.15 : 0.97 + rand() * 0.18;
+    list.push({
+      x: round2(Math.min(100, Math.max(0, x))),
+      scale: round2(Math.min(1.15, scale)),
+      row,
+      delay: round2(rand() * 6),
+      flip: rand() < 0.5,
+    });
   }
-  const ring = (r) => `<circle cx="${c}" cy="${c}" r="${(c * r).toFixed(2)}" fill="none" stroke="#d8b45a" stroke-width="2"/>`;
-  const core = `<circle cx="${c}" cy="${c}" r="${(c * 0.1).toFixed(2)}" fill="#d8b45a"/>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="玫瑰窗">${paths.join('')}${ring(0.95)}${ring(0.4)}${ring(0.12)}${core}</svg>`;
+  return list;
+}
+
+/**
+ * 單一教徒（面向右的側影，跪坐）。viewBox 100×100，地面在 y≈97，髖部約 (40,64)。
+ * 巢狀結構：w-torso 內含身體、w-head、兩組手臂，所以 CSS 旋轉/呼吸 w-torso 時整個上半身一起動。
+ * 純色，繼承 currentColor。
+ */
+export function worshipperSVG() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="currentColor" stroke="currentColor" aria-hidden="true" focusable="false">'
+    // 小腿貼地、大腿由膝蓋斜上至髖部
+    + '<g class="w-legs" fill="none" stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M16 91.5H61" stroke-width="11"/>'
+    + '<path d="M59 86L41 63" stroke-width="15"/>'
+    + '</g>'
+    + '<g class="w-torso">'
+    // 駝背的上身
+    + '<path class="w-back" d="M34 68C27 52 33 35 46 32C54 31 56 40 53 52C51 60 49 66 47 71Z" stroke="none"/>'
+    + '<g class="w-head">'
+    + '<path d="M49 33L52 27" fill="none" stroke-width="5.5" stroke-linecap="round"/>'
+    + '<circle cx="53" cy="21" r="7.4" stroke="none"/>'
+    + '</g>'
+    // 雙手合十，低垂於身前
+    + '<g class="w-arms-down" fill="none" stroke-linecap="round">'
+    + '<path d="M47 40L55 57L67 46" stroke-width="5.5" stroke-linejoin="round"/>'
+    + '<ellipse cx="68" cy="45" rx="4.6" ry="3.4" transform="rotate(-35 68 45)" stroke="none" fill="currentColor"/>'
+    + '</g>'
+    // 雙手高舉
+    + '<g class="w-arms-up" fill="none" stroke-linecap="round">'
+    + '<path d="M49 38Q72 34 78 6" stroke-width="6.5"/>'
+    + '<path d="M52 42Q80 40 86 12" stroke-width="5" opacity="0.85"/>'
+    + '<circle cx="78.5" cy="4.5" r="4.2" stroke="none" fill="currentColor"/>'
+    + '<circle cx="86.5" cy="9.5" r="3.6" stroke="none" fill="currentColor"/>'
+    + '</g>'
+    + '</g>'
+    + '</svg>';
+}
+
+/** 把 layout 轉成 DOM 字串；位置/縮放/呼吸延遲走 CSS 自訂屬性。 */
+export function congregationHTML(layout) {
+  const svg = worshipperSVG();
+  return (layout ?? [])
+    .map((w) => `<div class="worshipper${w.flip ? ' flip' : ''}" style="--x:${w.x}%;--s:${w.scale};--d:${w.delay}s" data-row="${w.row}">${svg}</div>`)
+    .join('');
+}
+
+const 教徒狀態 = { load: 'idle', ask: 'bow', reveal: 'raise', crisis: 'still', reset: 'idle' };
+
+/** 事件 → 教徒姿勢（未知事件一律回到 idle）。 */
+export function worshipState(event) {
+  return Object.hasOwn(教徒狀態, event) ? 教徒狀態[event] : 'idle';
 }
 
 // ---------------------------------------------------------------------------
 // DOM 控制器：以注入的 root 查詢元素，缺少的元素一律略過，不丟錯。
 // ---------------------------------------------------------------------------
 
-const 粒子數 = 60;
-const 入口動畫毫秒 = 2400 + 300; // 與 style.css 的 --gate-open 對齊再加一點餘裕
-const 光環毫秒 = 1600 + 200;
+const 粒子數 = 40;
+const 閃光毫秒 = 1600 + 200; // 與 style.css 的 --pulse-time 對齊再加一點餘裕
 
 function detectReducedMotion() {
   try {
@@ -99,11 +155,18 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
   let dustTimer = null; // requestAnimationFrame id
   let dustCleanup = null;
   let pulseTimer = null;
-  let gateTimer = null;
 
-  function mountWindow() {
-    const el = $('rose-window');
-    if (el) el.innerHTML = roseWindowSVG();
+  function mountCongregation() {
+    const el = $('congregation');
+    if (el) el.innerHTML = congregationHTML(worshipLayout());
+  }
+
+  /** 設定教徒姿勢；光柱（#beams）跟著同一個狀態，reducedMotion 時 CSS 不做過渡。 */
+  function setWorship(event) {
+    const state = worshipState(event);
+    $('congregation')?.setAttribute('data-state', state);
+    $('beams')?.setAttribute('data-state', state);
+    return state;
   }
 
   function startDust() {
@@ -134,7 +197,7 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
       r: 0.6 + Math.random() * 1.6,
       vx: (Math.random() - 0.5) * 0.12,
       vy: -0.05 - Math.random() * 0.18,
-      a: 0.2 + Math.random() * 0.5,
+      a: 0.12 + Math.random() * 0.3,
       ph: Math.random() * Math.PI * 2,
     }));
     const frame = (t) => {
@@ -148,7 +211,7 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
         if (m.x > w + 4) m.x = -4;
         const twinkle = 0.65 + 0.35 * Math.sin(t / 1400 + m.ph);
         ctx.beginPath();
-        ctx.fillStyle = `rgba(232, 200, 120, ${(m.a * twinkle).toFixed(3)})`;
+        ctx.fillStyle = `rgba(200, 170, 105, ${(m.a * twinkle).toFixed(3)})`;
         ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
         ctx.fill();
       }
@@ -178,57 +241,17 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     dustCleanup = null;
   }
 
-  const mainEl = () => root.querySelector?.('main.page') ?? root.querySelector?.('.page') ?? null;
-
-  /** 入口未開時鎖住主內容；由控制器自己設定，這樣 app.js 沒載入時頁面仍可用（靜態 HTML 不帶 inert）。 */
-  function lockMain() {
-    const gate = $('gate');
-    if (gate && !gate.hidden) mainEl()?.setAttribute('inert', '');
-  }
-  lockMain();
-
-  function focusGate() {
-    try {
-      $('enter-sound')?.focus?.({ preventScroll: true });
-    } catch { /* 焦點失敗不影響流程 */ }
-  }
-
-  function openGate(onOpen) {
-    const gate = $('gate');
-    const main = mainEl();
-    doc?.body?.classList.add('entered');
-    const finish = () => {
-      clearTimeout(gateTimer);
-      gateTimer = null;
-      if (gate) gate.hidden = true;
-      main?.removeAttribute('inert');
-      $('mute')?.removeAttribute('hidden');
-      // 入口開啟後才執行待辦（例如分享連結的提問），此時 main 已不是 inert，訊息才讀得到
-      try { onOpen?.(); } catch (error) { console.warn('入口開啟後的待辦出錯：', error); }
-      const notice = $('notice');
-      const noticeShown = Boolean(notice) && !notice.hidden && !notice.classList.contains('busy') && Boolean(notice.textContent);
-      if (noticeShown) {
-        // 重設文字，讓 live region 在 inert 解除後重新播報
-        const text = notice.textContent;
-        notice.textContent = '';
-        notice.textContent = text;
-      }
-      try {
-        (noticeShown ? notice : $('question'))?.focus?.({ preventScroll: true });
-      } catch { /* 焦點失敗不影響流程 */ }
-    };
-    if (!gate) { finish(); return; }
-    gate.classList.add('open');
-    clearTimeout(gateTimer);
-    gateTimer = setTimeout(finish, reduced ? 1000 : 入口動畫毫秒);
-  }
-
+  /** 頂部光線一閃，暗角瞬間收緊（body.pulsing 驅動 ::after）。 */
   function pulse() {
-    const el = $('rose-window');
+    const el = $('beams');
     if (!el || reduced) return;
     restartClass(el, 'pulse');
+    doc?.body && restartClass(doc.body, 'pulsing');
     clearTimeout(pulseTimer);
-    pulseTimer = setTimeout(() => el.classList.remove('pulse'), 光環毫秒);
+    pulseTimer = setTimeout(() => {
+      el.classList.remove('pulse');
+      doc?.body?.classList.remove('pulsing');
+    }, 閃光毫秒);
   }
 
   function setBusy(on) {
@@ -275,7 +298,9 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
   function calm() {
     clearTimeout(pulseTimer);
     pulseTimer = null;
-    $('rose-window')?.classList.remove('pulse');
+    $('beams')?.classList.remove('pulse');
+    doc?.body?.classList.remove('pulsing');
+    setWorship('crisis');
     $('notice')?.classList.remove('busy');
     for (const el of root.querySelectorAll?.('.reveal-late, .ch') ?? []) {
       el.classList.remove('reveal-late');
@@ -283,5 +308,5 @@ export function createSanctuary({ root = document, reducedMotion } = {}) {
     }
   }
 
-  return { mountWindow, startDust, stopDust, openGate, focusGate, pulse, setBusy, reveal, calm };
+  return { mountCongregation, setWorship, startDust, stopDust, pulse, setBusy, reveal, calm };
 }

@@ -5,16 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>主的旨意</title>
 <meta name="description" content="把你的煩惱交給主。祂會用經文回答你。">
-<meta name="theme-color" content="#0b0907">
+<meta name="theme-color" content="#050403">
 <link rel="stylesheet" href="assets/style.css">
-<noscript><style>#gate{display:none}.mute{display:none}</style></noscript>
+<noscript><style>.mute,.hint{display:none}</style></noscript>
 </head>
 <body>
-<div id="rose-window" class="rose-window" aria-hidden="true"></div>
+<div class="fog" aria-hidden="true"><i></i><i></i></div>
+<div class="candles" aria-hidden="true"><i></i><i></i></div>
 <div id="beams" class="beams" aria-hidden="true"></div>
 <canvas id="dust" class="dust" aria-hidden="true"></canvas>
+<div id="congregation" class="congregation" aria-hidden="true"></div>
 
-<button type="button" id="mute" class="mute" aria-pressed="false" aria-label="靜音" hidden>♪</button>
+<button type="button" id="mute" class="mute" aria-pressed="false" aria-label="靜音">♪</button>
 
 <main class="page">
   <header class="masthead">
@@ -49,27 +51,7 @@
   </footer>
 </main>
 
-<div id="gate" class="gate" role="dialog" aria-modal="true" aria-label="進入聖殿">
-  <div class="gate-curtain gate-left"></div>
-  <div class="gate-curtain gate-right"></div>
-  <div class="gate-body">
-    <div class="gate-cross" aria-hidden="true"></div>
-    <div class="gate-actions">
-      <button type="button" id="enter-sound">進入聖殿</button>
-      <button type="button" id="enter-silent" class="quiet">靜默進入</button>
-    </div>
-  </div>
-</div>
+<p id="hint" class="hint" role="status" hidden>觸碰任一處，聆聽聖樂</p>
 <script type="module" src="assets/app.js"></script>
-<script>
-// 後備：app.js 載入失敗（模組錯誤、舊瀏覽器、CSP、404）時，入口不能永遠擋住頁面
-setTimeout(function () {
-  if (window.__sanctuaryReady) return;
-  var gate = document.getElementById('gate');
-  if (gate) gate.hidden = true;
-  var main = document.querySelector('main.page');
-  if (main) main.removeAttribute('inert');
-}, 4000);
-</script>
 </body>
 </html>

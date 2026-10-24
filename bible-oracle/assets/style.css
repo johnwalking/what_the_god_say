@@ -1,21 +1,34 @@
-/* 哥德式大教堂：深褐近黑、金字、玫瑰窗、斜射光束、漂浮灰塵。
-   常用的調整旋鈕都在 :root（色票、旋轉秒數、光束秒數、各動畫時長）。 */
+/* 黑暗聖殿：近黑底、低飽和暗金、斜射光束、霧、燭光、底部跪拜教徒剪影。
+   常用旋鈕都在 :root：
+   --bg/--gold/--faded/--text 色票；--vignette 暗角深度；--beam-level 光束亮度；
+   --fog-speed 霧漂移秒數；--candle-level 燭光亮度；--worship-breath 呼吸秒數；
+   --worship-bow 低頭/舉手過渡秒數；--worship-dark-front/back 前後排剪影顏色。 */
 :root {
-  --bg: #0b0907;
-  --gold: #d8b45a;
-  --gold-rgb: 216, 180, 90;
-  --faded: #a8957a;
-  --text: #e9dfc7;
+  --bg: #050403;
+  --gold: #b8995a;
+  --gold-title: #c9a867;
+  --gold-rgb: 184, 153, 90;
+  --faded: #8f7f68;
+  --text: #d9cdb4;
+  --blood: 74, 15, 20;
   --serif: "Noto Serif TC", "Songti TC", "PMingLiU", "SimSun", serif;
 
-  --rose-size: min(78vw, 25rem);
-  --rose-spin: 120s;
+  --vignette: 0.88;
+  --beam-level: 1;
+  --fog-speed: 150s;
+  --candle-level: 1;
   --beam-cycle: 11s;
-  --gate-open: 2.4s;
   --pulse-time: 1.6s;
   --busy-time: 2.2s;
   --ch-fade: 0.6s;
   --late-fade: 1.2s;
+
+  --worship-height: 22vh;
+  --worship-breath: 7.5s;
+  --worship-bow: 0.8s;
+  --worship-fade-in: 3s;
+  --worship-dark-front: #020101;
+  --worship-dark-back: #0e0907;
 }
 
 * { box-sizing: border-box; }
@@ -25,7 +38,7 @@ html { background: var(--bg); overflow-x: clip; }
 body {
   position: relative;
   margin: 0;
-  padding: calc(var(--rose-size) + 3.5rem) 1.25rem 4rem;
+  padding: 5rem 1.25rem calc(var(--worship-height) + 3rem);
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: clip;
@@ -35,7 +48,7 @@ body {
   line-height: 1.9;
 }
 
-/* 固定背景層（取代 background-attachment: fixed） */
+/* 固定背景層：頂部一抹暗金、底部極深的暗紅、沉重的暗角 */
 body::before {
   content: "";
   position: fixed;
@@ -45,58 +58,77 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(var(--gold-rgb), 0.10), transparent 55%),
-    radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.75) 100%);
+    radial-gradient(ellipse at 50% 0%, rgba(var(--gold-rgb), 0.07), transparent 50%),
+    radial-gradient(ellipse at 50% 105%, rgba(var(--blood), 0.35), transparent 55%),
+    radial-gradient(ellipse at 50% 42%, transparent 25%, rgba(0, 0, 0, var(--vignette)) 100%);
 }
-
-/* ---- 玫瑰窗：容器靜態，光暈在 ::before（無 filter），只有 svg 以 transform 旋轉 ---- */
-.rose-window {
-  position: absolute;
-  top: 1.5rem;
-  left: 50%;
-  width: var(--rose-size);
-  height: var(--rose-size);
-  margin-left: calc(var(--rose-size) / -2);
-  pointer-events: none;
+/* pulse() 時暗角瞬間收緊 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
   z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at 50% 35%, transparent 20%, rgba(0, 0, 0, 0.8) 85%);
 }
-.rose-window::before {
-  content: "";
-  position: absolute;
-  inset: -22%;
-  z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--gold-rgb), 0.55) 0%, rgba(var(--gold-rgb), 0.28) 42%, transparent 68%);
-  opacity: 0.6;
-}
-.rose-window svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  opacity: 0.88;
-  will-change: transform;
-  animation: spin var(--rose-spin) linear infinite;
-}
-.rose-window.pulse::before { animation: flash var(--pulse-time) ease-out; }
-.rose-window.pulse::after {
-  content: "";
-  position: absolute;
-  inset: 8%;
-  border-radius: 50%;
-  border: 2px solid rgba(var(--gold-rgb), 0.9);
-  box-shadow: 0 0 1.5rem rgba(var(--gold-rgb), 0.7), inset 0 0 1.5rem rgba(var(--gold-rgb), 0.5);
-  animation: halo var(--pulse-time) ease-out forwards;
+body.pulsing::after { animation: tighten var(--pulse-time) ease-out; }
+@keyframes tighten {
+  0%   { opacity: 0; }
+  25%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes flash {
-  0%   { opacity: 0.6; transform: scale(1); }
-  25%  { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 0.6; transform: scale(1); }
+/* ---- 霧：兩層低透明度 radial-gradient，只用 transform 緩慢漂移 ---- */
+.fog { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.fog i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 200%;
+  left: 0;
+  will-change: transform;
 }
-@keyframes halo {
-  from { transform: scale(0.6); opacity: 1; }
-  to   { transform: scale(1.7); opacity: 0; }
+.fog i:nth-child(1) {
+  background:
+    radial-gradient(ellipse 22% 38% at 20% 60%, rgba(120, 96, 68, 0.09), transparent),
+    radial-gradient(ellipse 18% 30% at 70% 78%, rgba(120, 96, 68, 0.08), transparent);
+  animation: drift var(--fog-speed) linear infinite alternate;
+}
+.fog i:nth-child(2) {
+  background:
+    radial-gradient(ellipse 26% 34% at 40% 82%, rgba(var(--blood), 0.16), transparent),
+    radial-gradient(ellipse 16% 28% at 88% 50%, rgba(120, 96, 68, 0.06), transparent);
+  animation: drift calc(var(--fog-speed) * 1.4) linear infinite alternate-reverse;
+}
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---- 燭光：兩側邊緣的暖光，透明度不規則緩慢閃爍 ---- */
+.candles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.candles i { position: absolute; top: 25%; bottom: 0; width: 38%; opacity: calc(0.6 * var(--candle-level)); }
+.candles i:nth-child(1) {
+  left: 0;
+  background: radial-gradient(ellipse at 0% 80%, rgba(170, 100, 40, 0.30), transparent 65%);
+  animation: flicker-a 5.3s ease-in-out infinite;
+}
+.candles i:nth-child(2) {
+  right: 0;
+  background: radial-gradient(ellipse at 100% 80%, rgba(170, 100, 40, 0.26), transparent 65%);
+  animation: flicker-b 6.7s ease-in-out infinite;
+}
+@keyframes flicker-a {
+  0%, 100% { opacity: calc(0.55 * var(--candle-level)); }
+  14% { opacity: calc(0.85 * var(--candle-level)); }
+  31% { opacity: calc(0.45 * var(--candle-level)); }
+  58% { opacity: calc(0.8 * var(--candle-level)); }
+  77% { opacity: calc(0.5 * var(--candle-level)); }
+}
+@keyframes flicker-b {
+  0%, 100% { opacity: calc(0.5 * var(--candle-level)); }
+  22% { opacity: calc(0.8 * var(--candle-level)); }
+  41% { opacity: calc(0.42 * var(--candle-level)); }
+  63% { opacity: calc(0.75 * var(--candle-level)); }
+  86% { opacity: calc(0.55 * var(--candle-level)); }
 }
 
 /* ---- 光束與灰塵 ---- */
@@ -106,17 +138,35 @@ body::before {
   pointer-events: none;
   z-index: 0;
   opacity: 0;
-  transition: opacity 2.5s ease 0.6s;
-  background:
-    linear-gradient(112deg, transparent 18%, rgba(var(--gold-rgb), 0.07) 24%, transparent 32%),
-    linear-gradient(108deg, transparent 34%, rgba(var(--gold-rgb), 0.05) 41%, transparent 49%),
-    linear-gradient(115deg, transparent 52%, rgba(var(--gold-rgb), 0.08) 58%, transparent 67%),
-    linear-gradient(109deg, transparent 70%, rgba(var(--gold-rgb), 0.05) 76%, transparent 84%);
-  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 85%);
-          mask-image: linear-gradient(to bottom, #000, transparent 85%);
+  animation: beams-in 4s ease 1s forwards;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 80%);
+          mask-image: linear-gradient(to bottom, #000, transparent 80%);
 }
-body.entered .beams { opacity: 1; animation: breathe var(--beam-cycle) ease-in-out 3s infinite alternate; }
-@keyframes breathe { from { opacity: 0.45; } to { opacity: 1; } }
+.beams::before, .beams::after { content: ""; position: absolute; inset: 0; }
+.beams::before {
+  background:
+    linear-gradient(112deg, transparent 18%, rgba(var(--gold-rgb), 0.045) 24%, transparent 32%),
+    linear-gradient(108deg, transparent 34%, rgba(var(--gold-rgb), 0.035) 41%, transparent 49%),
+    linear-gradient(115deg, transparent 52%, rgba(var(--gold-rgb), 0.05) 58%, transparent 67%),
+    linear-gradient(109deg, transparent 70%, rgba(var(--gold-rgb), 0.035) 76%, transparent 84%);
+  opacity: var(--beam-level);
+  animation: breathe var(--beam-cycle) ease-in-out 5s infinite alternate;
+}
+/* 舉手時由上而下的一道光柱：只用 opacity 過渡，持續到下一次提問 */
+.beams::after {
+  background: linear-gradient(to right, transparent 36%, rgba(var(--gold-rgb), 0.2) 50%, transparent 64%);
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+.beams[data-state="raise"]::after { opacity: 0.55; }
+.beams.pulse::after { animation: beams-flash var(--pulse-time) ease-out; }
+@keyframes beams-in { to { opacity: 1; } }
+@keyframes beams-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes breathe { from { opacity: 0.4; } to { opacity: 1; } }
 
 .dust {
   position: fixed;
@@ -127,6 +177,76 @@ body.entered .beams { opacity: 1; animation: breathe var(--beam-cycle) ease-in-o
   z-index: 1;
 }
 
+/* ---- 底部教徒：近黑剪影，後排較小較暗；不使用 filter ---- */
+.congregation {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--worship-height);
+  pointer-events: none;
+  z-index: 1;
+  animation: worship-in var(--worship-fade-in) ease-out both;
+}
+/* 剪影後方的暖色背光，讓黑色輪廓讀得出來（取代昂貴的 drop-shadow） */
+.congregation::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 135%;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(150, 92, 40, 0.34), transparent 70%),
+    linear-gradient(to top, rgba(var(--blood), 0.45), transparent 75%);
+}
+@keyframes worship-in { from { opacity: 0; } to { opacity: 1; } }
+
+.worshipper {
+  position: absolute;
+  left: var(--x);
+  bottom: -1.2vh; /* 略微沉入畫面底；舉手時整排抬高 1.2vh 剛好踏在底邊 */
+  transition: translate 1.4s ease;
+  height: calc(var(--worship-height) * 0.92 * var(--s, 1));
+  aspect-ratio: 1;
+  margin-left: calc(var(--worship-height) * -0.46 * var(--s, 1));
+  color: var(--worship-dark-front);
+}
+.worshipper[data-row="0"] {
+  bottom: calc(var(--worship-height) * 0.17 - 1.2vh);
+  height: calc(var(--worship-height) * 0.74 * var(--s, 1));
+  margin-left: calc(var(--worship-height) * -0.37 * var(--s, 1));
+  color: var(--worship-dark-back);
+}
+.worshipper.flip svg { transform: scaleX(-1); }
+.worshipper svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* 姿勢：transform 做姿勢（有過渡），獨立的 translate 屬性做呼吸（動畫），兩者互不干擾 */
+.worshipper .w-torso,
+.worshipper .w-head {
+  transform-box: view-box;
+  transition: transform var(--worship-bow) ease-in-out;
+}
+.worshipper .w-torso { transform-origin: 40px 64px; animation: breath var(--worship-breath) ease-in-out var(--d, 0s) infinite alternate; }
+.worshipper .w-head { transform-origin: 51px 31px; }
+.worshipper .w-arms-up { opacity: 0; transition: opacity 0.7s ease; }
+.worshipper .w-arms-down { opacity: 1; transition: opacity 0.7s ease; }
+@keyframes breath { from { translate: 0 1.6px; } to { translate: 0 -1.6px; } }
+
+/* raise 時整排微微抬高 */
+.congregation[data-state="raise"] .worshipper { translate: 0 -1.2vh; }
+/* bow：頭與上身前傾 */
+.congregation[data-state="bow"] .w-torso { transform: rotate(16deg); }
+.congregation[data-state="bow"] .w-head { transform: rotate(5deg); }
+/* raise：雙手高舉，身體微挺 */
+.congregation[data-state="raise"] .w-torso { transform: rotate(-5deg); }
+.congregation[data-state="raise"] .w-head { transform: rotate(-4deg); }
+.congregation[data-state="raise"] .w-arms-up { opacity: 1; }
+.congregation[data-state="raise"] .w-arms-down { opacity: 0; }
+/* still：深深低頭，完全靜止（沒有呼吸、沒有光柱） */
+.congregation[data-state="still"] .w-torso { transform: rotate(20deg); animation: none; }
+.congregation[data-state="still"] .w-head { transform: rotate(8deg); }
+
 /* ---- 版面 ---- */
 .page { position: relative; z-index: 2; max-width: 40rem; margin: 0 auto; }
 
@@ -135,16 +255,16 @@ body.entered .beams { opacity: 1; animation: breathe var(--beam-cycle) ease-in-o
   margin: 1.2rem 0 0.6rem;
   font-size: 2rem;
   font-weight: 400;
-  letter-spacing: 0.4em;
-  text-indent: 0.4em;
-  color: var(--gold);
-  text-shadow: 0 0 0.8rem rgba(var(--gold-rgb), 0.55), 0 0 2rem rgba(var(--gold-rgb), 0.25);
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: var(--gold-title);
+  text-shadow: 0 0 1.2rem rgba(var(--gold-rgb), 0.28), 0 0 3rem rgba(var(--blood), 0.5), 0 1px 2px #000;
 }
 .subtitle { margin: 0 0 1.2rem; color: var(--faded); font-size: 0.9rem; letter-spacing: 0.15em; }
 .rule {
   height: 1px;
   background: linear-gradient(to right, transparent, var(--gold), transparent);
-  opacity: 0.6;
+  opacity: 0.45;
 }
 
 .ask { display: flex; gap: 0.75rem; }
@@ -152,26 +272,22 @@ body.entered .beams { opacity: 1; animation: breathe var(--beam-cycle) ease-in-o
   flex: 1;
   min-width: 0;
   padding: 0.7rem 0.9rem;
-  border: 1px solid rgba(var(--gold-rgb), 0.55);
-  background: rgba(11, 9, 7, 0.7);
+  border: 1px solid rgba(var(--gold-rgb), 0.4);
+  background: rgba(5, 4, 3, 0.82);
   color: var(--text);
   font-family: var(--serif);
   font-size: 1rem;
-  box-shadow: 0 0 0.9rem rgba(var(--gold-rgb), 0.15), inset 0 0 0.6rem rgba(var(--gold-rgb), 0.06);
+  box-shadow: inset 0 0 0.6rem rgba(0, 0, 0, 0.6);
   transition: box-shadow 0.25s, border-color 0.25s;
 }
 .ask input::placeholder { color: var(--faded); opacity: 0.8; }
-.ask input:focus {
-  outline: 1px solid var(--gold);
-  outline-offset: 2px;
-  border-color: var(--gold);
-  box-shadow: 0 0 1.4rem rgba(var(--gold-rgb), 0.45), inset 0 0 0.8rem rgba(var(--gold-rgb), 0.12);
-}
+.ask input:focus { border-color: var(--gold); box-shadow: 0 0 1.2rem rgba(138, 104, 40, 0.5), inset 0 0 0.6rem rgba(0, 0, 0, 0.6); }
+.ask input:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
 button {
   padding: 0.7rem 1.1rem;
-  border: 1px solid var(--gold);
-  background: rgba(11, 9, 7, 0.6);
+  border: 1px solid rgba(var(--gold-rgb), 0.5);
+  background: rgba(5, 4, 3, 0.8);
   color: var(--gold);
   font-family: var(--serif);
   font-size: 0.95rem;
@@ -180,17 +296,17 @@ button {
   transition: background 0.25s, box-shadow 0.25s, color 0.25s;
 }
 button:hover, button:focus-visible {
-  background: rgba(var(--gold-rgb), 0.14);
-  color: #f0d88e;
-  box-shadow: 0 0 1rem rgba(var(--gold-rgb), 0.45);
+  background: rgba(var(--gold-rgb), 0.1);
+  color: #dcc17f;
+  box-shadow: 0 0 1rem rgba(138, 104, 40, 0.45);
 }
-button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
 .notice { margin: 1.5rem 0 0; color: var(--faded); font-size: 0.95rem; }
 .notice.busy { animation: breathe-text var(--busy-time) ease-in-out infinite; }
 @keyframes breathe-text {
   0%, 100% { opacity: 0.45; text-shadow: none; }
-  50%      { opacity: 1; text-shadow: 0 0 0.8rem rgba(var(--gold-rgb), 0.6); }
+  50%      { opacity: 1; text-shadow: 0 0 0.8rem rgba(var(--gold-rgb), 0.45); }
 }
 
 .answer { margin-top: 3rem; }
@@ -202,7 +318,7 @@ button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
   line-height: 2.1;
   text-indent: 2em;
   color: var(--text);
-  text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.25);
+  text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.18), 0 1px 3px #000;
 }
 .ref {
   display: block;
@@ -214,6 +330,7 @@ button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
 }
 .quip {
   margin: 2.5rem 0 0;
+  text-shadow: 0 1px 3px #000;
   padding-top: 1.5rem;
   border-top: 1px solid rgba(var(--gold-rgb), 0.35);
   color: var(--faded);
@@ -221,18 +338,18 @@ button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
 }
 .actions { margin-top: 2.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
-.colophon { margin-top: 5rem; text-align: center; color: var(--faded); font-size: 0.8rem; }
+.colophon { margin-top: 4rem; text-align: center; color: var(--faded); font-size: 0.8rem; }
 
 /* ---- 揭曉：逐字浮現、出處與補刀延遲淡入 ---- */
 .ch {
   display: inline; /* 不用 inline-block，否則標點會失去中文斷行規則而單獨成行 */
   opacity: 0;
-  text-shadow: 0 0 0.9rem rgba(var(--gold-rgb), 0.95), 0 0 1.8rem rgba(var(--gold-rgb), 0.6);
+  text-shadow: 0 0 0.9rem rgba(var(--gold-rgb), 0.8), 0 0 1.8rem rgba(var(--gold-rgb), 0.45);
   animation: ch-in var(--ch-fade) ease-out forwards;
   animation-delay: var(--d, 0s);
 }
 @keyframes ch-in {
-  to { opacity: 1; text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.25); }
+  to { opacity: 1; text-shadow: 0 0 0.6rem rgba(var(--gold-rgb), 0.18), 0 1px 3px #000; }
 }
 .reveal-late {
   opacity: 0;
@@ -258,59 +375,45 @@ button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
 .mute[hidden] { display: none; }
 .mute[aria-pressed="true"] { color: var(--faded); border-color: rgba(var(--gold-rgb), 0.35); text-decoration: line-through; }
 
-/* ---- 入口 ---- */
-.gate {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-}
-.gate[hidden] { display: none; }
-.gate-curtain {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 50%;
-  background: #000;
-  transition: transform var(--gate-open) cubic-bezier(0.7, 0, 0.2, 1);
-}
-.gate-left  { left: 0; }
-.gate-right { right: 0; }
-.gate-body {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3rem;
-  transition: opacity 0.9s ease;
-}
-.gate-cross {
-  position: relative;
-  width: 3.4rem;
-  height: 5.4rem;
-  filter: drop-shadow(0 0 0.9rem rgba(var(--gold-rgb), 0.8)) drop-shadow(0 0 2.4rem rgba(var(--gold-rgb), 0.4));
-  animation: cross-glow 4s ease-in-out infinite;
-}
-.gate-cross::before, .gate-cross::after {
-  content: "";
-  position: absolute;
-  background: linear-gradient(var(--gold), #f0d88e);
-}
-.gate-cross::before { left: calc(50% - 2px); top: 0; width: 4px; height: 100%; }
-.gate-cross::after  { left: 0; top: 28%; width: 100%; height: 4px; }
-@keyframes cross-glow {
-  0%, 100% { opacity: 0.65; }
-  50%      { opacity: 1; }
-}
-.gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; padding: 0 1.25rem; }
-.gate-actions button { min-width: 9rem; }
-.gate-actions .quiet { border-color: rgba(var(--gold-rgb), 0.4); color: var(--faded); }
 
-.gate.open { pointer-events: none; }
-.gate.open .gate-body { opacity: 0; }
-.gate.open .gate-left  { transform: translateX(-100%); }
-.gate.open .gate-right { transform: translateX(100%); }
+/* ---- 提示：淡淡一行，固定於底部中央偏上，可淡出 ---- */
+.hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--worship-height) + 1.2rem);
+  transform: translateX(-50%);
+  z-index: 3;
+  margin: 0;
+  width: max-content;
+  max-width: 90vw;
+  text-align: center;
+  color: #7f705b;
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 1.5s ease;
+}
+.hint[hidden] { display: none; }
+.hint.fade { opacity: 0; }
+
+/* ---- 靜音鍵 ---- */
+.mute {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 5;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.mute[hidden] { display: none; }
+.mute[aria-pressed="true"] { color: var(--faded); border-color: rgba(var(--gold-rgb), 0.3); text-decoration: line-through; }
 
 .visually-hidden {
   position: absolute; width: 1px; height: 1px;
@@ -318,22 +421,22 @@ button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ---- 行動裝置 ---- */
+/* ---- 行動裝置：後排隱藏，前排縮小，不遮住表單與答案 ---- */
 @media (max-width: 599px) {
-  :root { --rose-size: min(86vw, 19rem); }
-  body { padding-left: 1rem; padding-right: 1rem; }
-  .masthead h1 { font-size: 1.6rem; letter-spacing: 0.3em; text-indent: 0.3em; }
+  :root { --worship-height: 15vh; }
+  body { padding: 3.5rem 1rem calc(var(--worship-height) + 2.5rem); }
+  .masthead h1 { font-size: 1.6rem; letter-spacing: 0.35em; text-indent: 0.35em; }
   .verse { font-size: 1.2rem; }
   .ask { flex-direction: column; }
   .ask button { width: 100%; }
+  .worshipper[data-row="0"] { display: none; }
+  .worshipper:nth-child(4n) { display: none; } /* 前排再疏一點，免得擠在一起 */
+  .congregation::before { height: 120%; }
 }
 
-/* ---- 減少動態：只留淡入，其餘直接顯示 ---- */
+/* ---- 減少動態：不漂浮、不逐字、教徒維持對應姿勢但沒有過渡 ---- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; }
-  .rose-window.pulse::after { display: none; }
-  .beams { transition: opacity 1s; }
-  .gate-curtain { transition: opacity 0.8s; }
-  .gate.open .gate-left, .gate.open .gate-right { transform: none; opacity: 0; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .beams { opacity: 1; }
   .ch, .reveal-late { opacity: 1; transform: none; }
 }
