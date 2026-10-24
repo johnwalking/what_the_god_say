@@ -2700,7 +2700,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `eval/results.json`（`rows` 內各方案的 `pick`）
-- Produces: `judge.sample(results, n=40, seed=0) -> Tuple[List[dict], Dict[str, dict]]`（`batch`：每項 `{id,q,ref,text,quip}`，不含方案名且隨機排序；`key`：`id → {method, q}`）；`judge.summarize(key, scores) -> Dict[str, dict]`（各方案 `relevance`、`funny` 平均與 `compliant` 比例）。CLI：`python eval/judge.py sample`、`python eval/judge.py summarize`
+- Produces: `judge.judged_keys(results) -> List[str]`（依前綴 `B0`、`B1h`、`B2` 找出唯一對應的方案名稱，找不到或不唯一時 `ValueError`）；`judge.sample(results, n=40, seed=0) -> Tuple[List[dict], Dict[str, dict]]`（`batch`：每項 `{id,q,ref,text,quip}`，不含方案名且隨機排序；`key`：`id → {method, q}`）；`judge.summarize(key, scores) -> Dict[str, dict]`（各方案 `relevance`、`funny` 平均與 `compliant` 比例）。CLI：`python eval/judge.py sample`、`python eval/judge.py summarize`
 
 - [ ] **Step 1: 寫失敗的測試**
 
@@ -2709,23 +2709,32 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```python
 from __future__ import annotations
 
-from eval.judge import sample, summarize
+from eval.judge import judged_keys, sample, summarize
 
 
 def _results():
-    def rows(method, quip):
+    def rows(quip):
         return [
             {'q': f'題{i}', 'kind': 'topic', 'pick': {'id': f'V{i}', 'ref': f'書 {i}:1', 'text': f'經{i}', 'quip': quip}}
             for i in range(10)
         ]
-    return {'rows': {'B1h 混合檢索': rows('b1', None), 'B2 混合檢索 + rerank': rows('b2', '補刀補刀補刀補刀')}}
+    return {'rows': {
+        'B0 TF-IDF': rows('人工補刀人工補刀'),
+        'B1 bge-m3': rows(None),
+        'B1h 混合檢索': rows(None),
+        'B2 某設定': rows('補刀補刀補刀補刀'),
+    }}
+
+
+def test_judged_keys_selects_b0_b1h_b2_by_prefix():
+    assert judged_keys(_results()) == ['B0 TF-IDF', 'B1h 混合檢索', 'B2 某設定']
 
 
 def test_sample_hides_method_and_is_deterministic():
     batch, key = sample(_results(), n=6, seed=0)
-    assert len(batch) == 6 and len(key) == 6
+    assert len(batch) == 18 and len(key) == 18  # 6 題 × 3 方案
     assert all('method' not in item for item in batch)
-    assert {key[item['id']]['method'] for item in batch} <= {'B1h 混合檢索', 'B2 混合檢索 + rerank'}
+    assert {key[item['id']]['method'] for item in batch} == {'B0 TF-IDF', 'B1h 混合檢索', 'B2 某設定'}
     assert sample(_results(), n=6, seed=0) == (batch, key)
 
 
@@ -2773,18 +2782,30 @@ from typing import Dict, List, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JUDGE_DIR = os.path.join(HERE, 'judge')
-JUDGED_METHODS = ('B1h 混合檢索', 'B2 混合檢索 + rerank')
+JUDGED_PREFIXES = ('B0', 'B1h', 'B2')  # B0 的補刀是人工寫的，當上限參考；B1 純全語料已知離題，不評
+
+
+def judged_keys(results: dict) -> List[str]:
+    """依前綴從 results['rows'] 找出要評審的方案名稱，順序固定為 B0、B1h、B2。"""
+    keys = []
+    for prefix in JUDGED_PREFIXES:
+        match = [k for k in results['rows'] if k == prefix or k.startswith(prefix + ' ')]
+        if len(match) != 1:
+            raise ValueError(f'找不到唯一的 {prefix} 方案：{match}')
+        keys.append(match[0])
+    return keys
 
 
 def sample(results: dict, n: int = 40, seed: int = 0) -> Tuple[List[dict], Dict[str, dict]]:
-    """對每個方案取同一批題目，打散並匿名化，裁判看不到方案名。"""
+    """對 B0、B1h、B2 取同一批題目，打散並匿名化，裁判看不到方案名。"""
     rng = random.Random(seed)
-    per_method = {m: {r['q']: r for r in results['rows'][m] if r['kind'] == 'topic'} for m in JUDGED_METHODS}
+    methods = judged_keys(results)
+    per_method = {m: {r['q']: r for r in results['rows'][m] if r['kind'] == 'topic'} for m in methods}
     common = sorted(set.intersection(*(set(rows) for rows in per_method.values())))
     questions = rng.sample(common, min(n, len(common)))
 
     items = []
-    for method in JUDGED_METHODS:
+    for method in methods:
         for q in questions:
             pick = per_method[method][q]['pick']
             items.append({'method': method, 'q': q, 'ref': pick['ref'], 'text': pick['text'], 'quip': pick['quip']})
@@ -2846,7 +2867,7 @@ if __name__ == '__main__':
 - [ ] **Step 4: 確認通過並產生批次**
 
 Run: `.venv/bin/pytest eval/test_judge.py -q && .venv/bin/python eval/judge.py sample`
-Expected: 3 passed；輸出 `已寫入 80 項到 eval/judge/batch.json`
+Expected: 5 passed；輸出 `已寫入 120 項到 eval/judge/batch.json`
 
 - [ ] **Step 5: 派 subagent 評分**
 
