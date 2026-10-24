@@ -5,10 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>主的旨意</title>
 <meta name="description" content="把你的煩惱交給主。祂會用經文回答你。">
+<meta name="theme-color" content="#0b0907">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-<main class="page">
+<div id="rose-window" class="rose-window" aria-hidden="true"></div>
+<div id="beams" class="beams" aria-hidden="true"></div>
+<canvas id="dust" class="dust" aria-hidden="true"></canvas>
+
+<button type="button" id="mute" class="mute" aria-pressed="false" aria-label="靜音" hidden>♪</button>
+
+<main class="page" inert>
   <header class="masthead">
     <div class="rule"></div>
     <h1>主 的 旨 意</h1>
@@ -40,6 +47,18 @@
     <p>經文引自和合本，一字未改。</p>
   </footer>
 </main>
+
+<div id="gate" class="gate" role="dialog" aria-label="進入聖殿">
+  <div class="gate-curtain gate-left"></div>
+  <div class="gate-curtain gate-right"></div>
+  <div class="gate-body">
+    <div class="gate-cross" aria-hidden="true"></div>
+    <div class="gate-actions">
+      <button type="button" id="enter-sound">進入聖殿</button>
+      <button type="button" id="enter-silent" class="quiet">靜默進入</button>
+    </div>
+  </div>
+</div>
 <script type="module" src="assets/app.js"></script>
 </body>
 </html>

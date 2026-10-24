@@ -5,10 +5,10 @@
 const 寬 = 840;
 const 高 = 1200;
 const 邊距 = 90;
-const 紙色 = '#f4f0e6';
-const 墨色 = '#241f18';
-const 金色 = '#8a7434';
-const 淡色 = '#7a7266';
+const 紙色 = '#0b0907';
+const 墨色 = '#e9dfc7';
+const 金色 = '#d8b45a';
+const 淡色 = '#a8957a';
 const 字體 = '"Noto Serif TC", "Songti TC", "PMingLiU", serif';
 
 /** 逐字累加量寬，超過就換行。回傳每一行的字串。 */
