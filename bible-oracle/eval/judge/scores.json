@@ -1,0 +1,722 @@
+[
+ {
+  "id": "item-001",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-002",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-003",
+  "relevance": 4,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-004",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-005",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-006",
+  "relevance": 1,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-007",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-008",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-009",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-010",
+  "relevance": 3,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-011",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-012",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-013",
+  "relevance": 2,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-014",
+  "relevance": 3,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-015",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-016",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-017",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-018",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-019",
+  "relevance": 2,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-020",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-021",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-022",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-023",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-024",
+  "relevance": 3,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-025",
+  "relevance": 3,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-026",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-027",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-028",
+  "relevance": 2,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-029",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-030",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-031",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-032",
+  "relevance": 4,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-033",
+  "relevance": 2,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-034",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-035",
+  "relevance": 3,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-036",
+  "relevance": 1,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-037",
+  "relevance": 3,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-038",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-039",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-040",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-041",
+  "relevance": 5,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-042",
+  "relevance": 3,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-043",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-044",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-045",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-046",
+  "relevance": 2,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-047",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-048",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-049",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-050",
+  "relevance": 3,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-051",
+  "relevance": 3,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-052",
+  "relevance": 3,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-053",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-054",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-055",
+  "relevance": 1,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-056",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-057",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-058",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-059",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-060",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-061",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-062",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-063",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-064",
+  "relevance": 3,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-065",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": false
+ },
+ {
+  "id": "item-066",
+  "relevance": 1,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-067",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-068",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-069",
+  "relevance": 2,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-070",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-071",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-072",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-073",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-074",
+  "relevance": 3,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-075",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-076",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-077",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-078",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-079",
+  "relevance": 3,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-080",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-081",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-082",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-083",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-084",
+  "relevance": 2,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-085",
+  "relevance": 2,
+  "funny": 1,
+  "compliant": true
+ },
+ {
+  "id": "item-086",
+  "relevance": 1,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-087",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-088",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-089",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-090",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-091",
+  "relevance": 1,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-092",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-093",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-094",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-095",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-096",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-097",
+  "relevance": 2,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-098",
+  "relevance": 5,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-099",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-100",
+  "relevance": 2,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-101",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-102",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-103",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-104",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-105",
+  "relevance": 3,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-106",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-107",
+  "relevance": 4,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-108",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-109",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-110",
+  "relevance": 5,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-111",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-112",
+  "relevance": 5,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-113",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-114",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-115",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-116",
+  "relevance": 2,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-117",
+  "relevance": 4,
+  "funny": 2,
+  "compliant": true
+ },
+ {
+  "id": "item-118",
+  "relevance": 5,
+  "funny": 3,
+  "compliant": true
+ },
+ {
+  "id": "item-119",
+  "relevance": 5,
+  "funny": 4,
+  "compliant": true
+ },
+ {
+  "id": "item-120",
+  "relevance": 4,
+  "funny": 3,
+  "compliant": true
+ }
+]
