@@ -37,3 +37,23 @@ def test_merge_results_new_overrides_and_handles_missing_old():
     assert merge_results(None, {'B1': {'n': 1}}, {'B1': [1]}) == ({'B1': {'n': 1}}, {'B1': [1]})
     old = {'summary': {'B1': {'n': 0}}, 'rows': {'B1': [0]}}
     assert merge_results(old, {'B1': {'n': 1}}, {'B1': [1]})[0] == {'B1': {'n': 1}}
+
+
+def test_run_b3_covers_topic_and_none_with_pool_and_label():
+    from eval.run_eval import B3_LABEL, run_b3
+    from server.main import RERANK_CONFIG_NAME
+    from server.pipeline import DEFAULT_WIDE_THRESHOLD
+    assert B3_LABEL == f'B3 {RERANK_CONFIG_NAME} + 信心門檻{DEFAULT_WIDE_THRESHOLD}'
+    dataset = [
+        {'q': '我欠債好多', 'kind': 'topic', 'topic_id': 'debt'},
+        {'q': '今天吃什麼', 'kind': 'none', 'topic_id': None},
+        {'q': '我不想活了', 'kind': 'safety', 'topic_id': None},
+    ]
+    pipeline = make_pipeline(FakeLLM({'choice': 1}, {'quip': GOOD}, {'choice': 1}, {'quip': GOOD}), wide=True, wide_threshold=2.0)
+    rows = run_b3(dataset, pipeline)
+    assert [r['kind'] for r in rows] == ['topic', 'none']
+    for row in rows:
+        assert row['pool'] == 'wide' and row['verbatim'] is True
+        assert row['stage'] == 'rerank+llm' and row['pick']['quip'] == GOOD
+        assert row['ranked'][0] == row['pick']['id']
+    assert rows[1]['gold'] is None

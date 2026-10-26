@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""跑評估。用法：python eval/run_eval.py [b0] [b1] [b2]（預設 b0 b1）。結果寫入 eval/results.json。"""
+"""跑評估。用法：python eval/run_eval.py [b0] [b1] [b1h] [b2] [b3]（預設 b0 b1）。結果寫入 eval/results.json。"""
 from __future__ import annotations
 
 import json
@@ -14,10 +14,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from eval.metrics import summarize, to_markdown  # noqa: E402
 from eval.pools import HERE, load_dataset, load_topics, topic_pools  # noqa: E402
 from server.main import RERANK_CONFIG_NAME  # noqa: E402
+from server.pipeline import DEFAULT_WIDE_THRESHOLD  # noqa: E402
 from server.safety import is_crisis  # noqa: E402
 
 RESULTS_PATH = os.path.join(HERE, 'results.json')
 B2_LABEL = f'B2 {RERANK_CONFIG_NAME}'
+B3_LABEL = f'B3 {RERANK_CONFIG_NAME} + 信心門檻{DEFAULT_WIDE_THRESHOLD}'
 STALE_LABELS = ('B2 bge-m3 + rerank',)
 EVALUABLE = ('topic', 'none')
 
@@ -106,6 +108,11 @@ def main(argv: List[str]) -> None:
         from server.main import build_default_pipeline
         rows_by_method[B2_LABEL] = run_b2(dataset, build_default_pipeline(cache=Cache()))
 
+    if 'b3' in methods:
+        from server.cache import Cache
+        from server.main import build_default_pipeline
+        rows_by_method[B3_LABEL] = run_b3(dataset, build_default_pipeline(cache=Cache()))
+
     summaries = {name: summarize(rows, pools) for name, rows in rows_by_method.items()}
     report = safety_report(dataset)
     old = None
@@ -118,7 +125,7 @@ def main(argv: List[str]) -> None:
     print(to_markdown(summaries))
     print(f"\n安全閘：召回 {report['recall']:.0%}，誤攔 {report['false_positives']} 題")
     for name, summary in summaries.items():
-        extras = {k: v for k, v in summary.items() if k in ('verbatim', 'stages', 'none_fallback_rate')}
+        extras = {k: v for k, v in summary.items() if k in ('verbatim', 'stages', 'none_fallback_rate', 'pool_counts', 'pool_by_kind', 'wide_rate', 'none_stages', 'none_verbatim')}
         if extras:
             print(f'{name}: {extras}')
 
@@ -133,6 +140,21 @@ def run_b2(dataset: List[dict], pipeline) -> List[dict]:
         rows.append({
             'q': r['q'], 'kind': r['kind'], 'gold': r['topic_id'],
             'ranked': order[:20], 'latency_ms': answer.latency_ms, 'stage': answer.stage,
+            'verbatim': answer.text == pipeline.corpus.get(answer.verse_id).text,
+            'pick': {'id': answer.verse_id, 'ref': answer.ref, 'text': answer.text, 'quip': answer.quip},
+        })
+    return rows
+
+
+def run_b3(dataset: List[dict], pipeline) -> List[dict]:
+    """正式設定（含信心門檻）跑所有 topic 與 none 題；命中指標之後只對 topic 題計。"""
+    rows = []
+    for r in _rows_for(dataset):
+        answer = pipeline.ask(r['q'])
+        order, _, pool = pipeline.rank_with_pool(r['q'])
+        rows.append({
+            'q': r['q'], 'kind': r['kind'], 'gold': r['topic_id'],
+            'ranked': order[:20], 'latency_ms': answer.latency_ms, 'stage': answer.stage, 'pool': pool,
             'verbatim': answer.text == pipeline.corpus.get(answer.verse_id).text,
             'pick': {'id': answer.verse_id, 'ref': answer.ref, 'text': answer.text, 'quip': answer.quip},
         })

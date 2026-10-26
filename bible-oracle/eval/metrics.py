@@ -41,6 +41,22 @@ def summarize(rows: List[dict], pools: Dict[str, Set[str]], ks=(1, 5, 20)) -> di
     none_rows = [r for r in rows if r['kind'] == 'none' and 'kind_out' in r]
     if none_rows:
         out['none_fallback_rate'] = sum(r['kind_out'] == 'fallback' for r in none_rows) / len(none_rows)
+
+    pooled = [r for r in rows if r.get('pool')]
+    if pooled:
+        out['pool_counts'] = dict(Counter(r['pool'] for r in pooled))
+        by_kind: Dict[str, Counter] = {}
+        for r in pooled:
+            by_kind.setdefault(r['kind'], Counter())[r['pool']] += 1
+        out['pool_by_kind'] = {k: dict(c) for k, c in by_kind.items()}
+        out['wide_rate'] = {k: c['wide'] / sum(c.values()) for k, c in by_kind.items()}
+        none_pooled = [r for r in pooled if r['kind'] == 'none']
+        none_stages = Counter(r['stage'] for r in none_pooled if r.get('stage'))
+        if none_stages:
+            out['none_stages'] = dict(none_stages)
+        none_verbatim = [r['verbatim'] for r in none_pooled if 'verbatim' in r]
+        if none_verbatim:
+            out['none_verbatim'] = sum(none_verbatim) / len(none_verbatim)
     return out
 
 

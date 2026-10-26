@@ -50,3 +50,26 @@ def test_summarize_verbatim_and_stages():
 def test_to_markdown_renders_none_as_dash():
     md = to_markdown({'B1': {'n': 2, 'hit@1': 0.5, 'hit@5': None, 'hit@20': 1.0, 'p50_ms': 12.0, 'p95_ms': 30.0}})
     assert '| B1 | 2 | 50.0% | — | 100.0% |' in md
+
+
+def test_summarize_reports_pool_counts_and_per_kind_wide_share():
+    rows = [
+        _row('a', ['A1'], pool='curated', stage='rerank+llm', verbatim=True),
+        _row('a', ['X'], pool='wide', stage='rerank+llm', verbatim=True),
+        {'q': 'n', 'kind': 'none', 'gold': None, 'ranked': ['Z'], 'latency_ms': 1.0,
+         'pool': 'wide', 'stage': 'rerank+llm', 'verbatim': True},
+        {'q': 'm', 'kind': 'none', 'gold': None, 'ranked': ['Z'], 'latency_ms': 1.0,
+         'pool': 'curated', 'stage': 'fallback', 'verbatim': False},
+    ]
+    s = summarize(rows, POOLS, ks=(1,))
+    assert s['n'] == 2 and s['hit@1'] == 0.5  # 命中只計 topic 題
+    assert s['pool_counts'] == {'curated': 2, 'wide': 2}
+    assert s['pool_by_kind'] == {'topic': {'curated': 1, 'wide': 1}, 'none': {'curated': 1, 'wide': 1}}
+    assert s['wide_rate'] == {'topic': 0.5, 'none': 0.5}
+    assert s['none_stages'] == {'rerank+llm': 1, 'fallback': 1}
+    assert s['none_verbatim'] == 0.5
+
+
+def test_summarize_omits_pool_fields_without_pool():
+    s = summarize([_row('a', ['A1'])], POOLS, ks=(1,))
+    assert not {'pool_counts', 'pool_by_kind', 'wide_rate', 'none_stages'} & set(s)
