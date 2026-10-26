@@ -6,7 +6,7 @@ from typing import List
 from server.cache import Cache
 from server.corpus import Corpus, Verse
 from server.embedder import HashEmbedder
-from server.pipeline import Pipeline
+from server.pipeline import DEFAULT_WIDE_THRESHOLD, Pipeline
 from server.retrieve import Retriever
 
 
@@ -34,11 +34,18 @@ def small_corpus() -> Corpus:
     ])
 
 
-def make_pipeline(llm, k: int = 3, cache=None, cache_ns: str = '') -> Pipeline:
+def make_pipeline(llm, k: int = 3, cache=None, cache_ns: str = '',
+                  wide: bool = False, wide_threshold: float = DEFAULT_WIDE_THRESHOLD) -> Pipeline:
     corpus, embedder = small_corpus(), HashEmbedder()
     matrix = embedder.encode([v.text for v in corpus.verses])
+    retriever, wide_retriever = Retriever(corpus, matrix, embedder), None
+    if wide:
+        # 精選庫只有前兩節；全語料為全部四節，兩者候選可區分。
+        retriever = Retriever(Corpus(corpus.verses[:2]), matrix[:2], embedder)
+        wide_retriever = Retriever(corpus, matrix, embedder)
     return Pipeline(
-        corpus, Retriever(corpus, matrix, embedder), llm,
+        corpus, retriever, llm,
         examples=[('範例經文', '範例補刀')], wrappers=['主已經回答了，是你還沒讀懂。'],
         cache=cache or Cache(), k=k, cache_ns=cache_ns,
+        wide_retriever=wide_retriever, wide_threshold=wide_threshold,
     )

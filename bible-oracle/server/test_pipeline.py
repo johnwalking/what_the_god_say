@@ -108,3 +108,81 @@ def test_empty_namespace_keeps_legacy_key_format():
     answer = pipeline.ask(Q)
     assert shared.get(f'rank:{normalize(Q)}') is not None
     assert shared.get(f'quip:{normalize(Q)}:{answer.verse_id}') == GOOD
+
+
+# ---- 信心門檻：精選庫最高分偏低時展開全語料 ----
+
+def _curated_best(pipeline, question=Q):
+    return pipeline.retriever.search(question, pipeline.k)[0].score
+
+
+def test_default_pipeline_is_curated_pool():
+    answer = make_pipeline(FakeLLM({'choice': 1}, {'quip': GOOD})).ask(Q)
+    assert answer.pool == 'curated'
+
+
+def test_crisis_answer_pool_is_curated_and_skips_retrieval():
+    pipeline = make_pipeline(FakeLLM(), wide=True, wide_threshold=2.0)
+
+    def boom(*args, **kwargs):
+        raise AssertionError('不應檢索')
+
+    pipeline.retriever.search = boom
+    pipeline.wide_retriever.search = boom
+    answer = pipeline.ask('我不想活了')
+    assert answer.kind == 'crisis' and answer.pool == 'curated' and answer.text == CARE_MESSAGE
+
+
+def test_high_confidence_stays_curated():
+    probe = make_pipeline(None, wide=True)
+    best = _curated_best(probe)
+    pipeline = make_pipeline(FakeLLM({'choice': 1}, {'quip': GOOD}), wide=True, wide_threshold=best)
+    answer = pipeline.ask(Q)
+    assert answer.pool == 'curated' and answer.pool_size == 2
+    assert pipeline.rank_with_pool(Q)[2] == 'curated'
+
+
+def test_low_confidence_widens_to_full_corpus():
+    pipeline = make_pipeline(FakeLLM({'choice': 1}, {'quip': GOOD}), wide=True, wide_threshold=2.0)
+    order, ok, pool = pipeline.rank_with_pool(Q)
+    wide_ids = [h.verse.id for h in pipeline.wide_retriever.search(Q, pipeline.k)]
+    assert pool == 'wide' and ok and order == wide_ids and len(order) == 3
+    answer = pipeline.ask(Q)
+    assert answer.pool == 'wide' and answer.pool_size == 3
+    assert answer.text == small_corpus().get(answer.verse_id).text
+
+
+def test_threshold_zero_never_widens():
+    pipeline = make_pipeline(FakeLLM({'choice': 1}, {'quip': GOOD}), wide=True, wide_threshold=0)
+    assert pipeline.ask(Q).pool == 'curated'
+
+
+def test_rank_matches_rank_with_pool():
+    pipeline = make_pipeline(None, wide=True, wide_threshold=2.0)
+    order, ok, pool = pipeline.rank_with_pool(Q)
+    assert pipeline.rank(Q) == (order, ok) and pool == 'wide'
+
+
+def test_cache_hit_preserves_pool():
+    llm = FakeLLM({'choice': 2}, {'quip': GOOD})
+    pipeline = make_pipeline(llm, wide=True, wide_threshold=2.0)
+    first = pipeline.rank_with_pool(Q)
+    calls = len(llm.calls)
+    assert pipeline.rank_with_pool(Q) == first and first[2] == 'wide'
+    assert len(llm.calls) == calls
+
+
+def test_legacy_cache_entry_without_pool_is_curated():
+    from server.cache import Cache
+    from server.textutil import normalize
+    shared = Cache()
+    shared.set(f'rank:{normalize(Q)}', {'order': ['Prov22v7', 'Eph5v22']})
+    pipeline = make_pipeline(FakeLLM(), cache=shared, wide=True, wide_threshold=2.0)
+    assert pipeline.rank_with_pool(Q) == (['Prov22v7', 'Eph5v22'], True, 'curated')
+
+
+def test_degraded_wide_result_is_not_cached():
+    llm = FakeLLM(LLMError('down'), {'choice': 1})
+    pipeline = make_pipeline(llm, wide=True, wide_threshold=2.0)
+    assert pipeline.rank_with_pool(Q)[1:] == (False, 'wide')
+    assert pipeline.rank_with_pool(Q)[1:] == (True, 'wide')

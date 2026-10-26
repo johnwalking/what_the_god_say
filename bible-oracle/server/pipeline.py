@@ -15,6 +15,8 @@ from server.safety import CARE_MESSAGE, is_crisis
 from server.textutil import fnv1a, normalize
 
 DEFAULT_WRAPPER = '主已經回答了，是你還沒讀懂。'
+# 量測（eval/dataset.jsonl, bge-m3）：正常煩惱題精選庫最高相似度 p10 0.517、離題題 p90 0.514；0.52 時離題 94% 展開、正常題 11% 展開。
+DEFAULT_WIDE_THRESHOLD = 0.52
 
 
 @dataclass
@@ -27,10 +29,12 @@ class Answer:
     stage: str
     pool_size: int
     latency_ms: int
+    pool: str = 'curated'
 
 
 class Pipeline:
-    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20, rerank_fn=None, cache_ns: str = ''):
+    def __init__(self, corpus: Corpus, retriever: Retriever, llm, examples, wrappers: List[str], cache: Cache, k: int = 20, rerank_fn=None, cache_ns: str = '',
+                 wide_retriever=None, wide_threshold: float = DEFAULT_WIDE_THRESHOLD):
         self.corpus = corpus
         self.retriever = retriever
         self.llm = llm
@@ -39,27 +43,38 @@ class Pipeline:
         self.cache = cache
         self.k = k
         self.rerank_fn = rerank_fn or rerank
+        self.wide_retriever = wide_retriever
+        self.wide_threshold = wide_threshold
         # 快取命名空間：rerank 設定或語料版本改變時換一個，舊快取就不會被誤用。空字串 = 舊格式的 key。
         self._ns = f'{cache_ns}:' if cache_ns else ''
 
     def rank(self, question: str) -> Tuple[List[str], bool]:
         """候選經文 id，rerank 選中者排第一，其餘維持檢索順序。回傳 (排序, rerank 是否成功)。"""
+        order, ok, _pool = self.rank_with_pool(question)
+        return order, ok
+
+    def rank_with_pool(self, question: str) -> Tuple[List[str], bool, str]:
+        """同 rank，另回傳候選來源 'curated'（精選庫）或 'wide'（精選庫信心偏低而展開的全語料）。"""
         key = f'rank:{self._ns}{normalize(question)}'
         cached = self.cache.get(key)
         if cached:
-            return cached['order'], True
+            return cached['order'], True, cached.get('pool', 'curated')
 
         hits = self.retriever.search(question, self.k)
+        pool = 'curated'
+        if self.wide_retriever is not None and hits[0].score < self.wide_threshold:
+            hits = self.wide_retriever.search(question, self.k)
+            pool = 'wide'
         order = [hit.verse.id for hit in hits]
         if self.llm is None:
-            return order, False
+            return order, False, pool
         try:
             chosen = self.rerank_fn(self.llm, question, hits)
         except (LLMError, RerankError):
-            return order, False
+            return order, False, pool
         order = [order[chosen]] + order[:chosen] + order[chosen + 1:]
-        self.cache.set(key, {'order': order})
-        return order, True
+        self.cache.set(key, {'order': order, 'pool': pool})
+        return order, True, pool
 
     def _quip(self, question: str, verse: Verse) -> Tuple[str, bool]:
         key = f'quip:{self._ns}{normalize(question)}:{verse.id}'
@@ -85,8 +100,8 @@ class Pipeline:
         if is_crisis(question):
             return Answer('crisis', '', '', CARE_MESSAGE, '', 'safety', 0, elapsed())
 
-        order, rerank_ok = self.rank(question)
+        order, rerank_ok, pool = self.rank_with_pool(question)
         verse = self.corpus.get(order[n % len(order)])
         quip, quip_ok = self._quip(question, verse)
         stage = f"{'rerank' if rerank_ok else 'top1'}+{'llm' if quip_ok else 'template'}"
-        return Answer('oracle', verse.ref, verse.id, verse.text, quip, stage, len(order), elapsed())
+        return Answer('oracle', verse.ref, verse.id, verse.text, quip, stage, len(order), elapsed(), pool)

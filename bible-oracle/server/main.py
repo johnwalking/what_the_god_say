@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from server.cache import Cache
-from server.pipeline import Pipeline
+from server.pipeline import DEFAULT_WIDE_THRESHOLD, Pipeline
 
 log = logging.getLogger('oracle')
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
@@ -82,22 +82,28 @@ def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
     from server.llm import OllamaLLM
     from server.quip import load_examples
     from server.rerank import CONFIGS
-    from server.retrieve import HybridRetriever, curated_ids_from_topics, load_index
+    from server.retrieve import HybridRetriever, Retriever, curated_ids_from_topics, load_index
 
     with open(os.path.join(ROOT, 'data', 'topics.json'), encoding='utf-8') as handle:
         topics_file = json.load(handle)
     corpus = load_corpus()
     config = CONFIGS[RERANK_CONFIG_NAME]
+    embedder, matrix = BgeM3Embedder(), load_index()
+    # k_curated=20 且 Pipeline.k=20：search 恰回傳精選庫最相似的 20 節（依分數降冪），
+    # 所以 hits[0].score 就是精選庫最高相似度，信心門檻據此判斷。
+    assert config['k_curated'] >= 20, '信心門檻假設候選全來自精選庫'
     retriever = HybridRetriever(
-        corpus, load_index(), BgeM3Embedder(), curated_ids_from_topics(topics_file),
+        corpus, matrix, embedder, curated_ids_from_topics(topics_file),
         k_curated=config['k_curated'],
     )
+    wide_retriever = Retriever(corpus, matrix, embedder)  # 共用 embedder 與矩陣，不重複載入
     return Pipeline(
         corpus, retriever, OllamaLLM(),
         examples=load_examples(topics_file), wrappers=topics_file['wrappers'],
         cache=cache or Cache(os.path.join(ROOT, 'data', 'cache.sqlite')),
         rerank_fn=config['fn'],
-        cache_ns=f'{RERANK_CONFIG_NAME}|{len(corpus.verses)}',
+        cache_ns=f'{RERANK_CONFIG_NAME}|{len(corpus.verses)}|wide{DEFAULT_WIDE_THRESHOLD}',
+        wide_retriever=wide_retriever, wide_threshold=DEFAULT_WIDE_THRESHOLD,
     )
 
 

@@ -22,7 +22,7 @@ def test_health():
 def test_oracle_returns_answer_fields():
     body = _client().post('/api/oracle', json={'q': '我欠債好多', 'n': 0}).json()
     assert body['kind'] == 'oracle' and body['quip'] == GOOD
-    assert set(body) == {'kind', 'ref', 'verse_id', 'text', 'quip', 'stage', 'pool_size', 'latency_ms'}
+    assert set(body) == {'kind', 'ref', 'verse_id', 'text', 'quip', 'stage', 'pool_size', 'latency_ms', 'pool'}
 
 
 def test_crisis_is_returned_as_crisis():
@@ -134,3 +134,26 @@ def test_rerank_config_name_exists_in_configs():
     from server.rerank import CONFIGS
     assert main.RERANK_CONFIG_NAME in CONFIGS
     assert {'k_curated', 'fn'} <= set(CONFIGS[main.RERANK_CONFIG_NAME])
+
+
+def test_build_default_pipeline_shares_embedder_and_matrix_with_wide_retriever(monkeypatch):
+    import numpy as np
+    from server import embedder as embedder_mod, llm as llm_mod, main, retrieve
+    from server.embedder import HashEmbedder
+    from server.fakes import small_corpus
+
+    corpus = small_corpus()
+    embedder = HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    monkeypatch.setattr(embedder_mod, 'BgeM3Embedder', lambda: embedder)
+    monkeypatch.setattr(llm_mod, 'OllamaLLM', lambda: None)
+    monkeypatch.setattr(retrieve, 'load_index', lambda: matrix)
+    monkeypatch.setattr('server.corpus.load_corpus', lambda: corpus)
+    monkeypatch.setattr(retrieve, 'curated_ids_from_topics', lambda _t: {'Eph5v22', 'Prov22v7'})
+    pipeline = main.build_default_pipeline(cache=main.Cache())
+    wide = pipeline.wide_retriever
+    assert wide.embedder is pipeline.retriever.embedder and wide.matrix is pipeline.retriever.matrix
+    assert wide.corpus is corpus
+    assert type(wide) is retrieve.Retriever
+    assert pipeline.wide_threshold == main.DEFAULT_WIDE_THRESHOLD
+    assert f'wide{main.DEFAULT_WIDE_THRESHOLD}' in pipeline._ns
