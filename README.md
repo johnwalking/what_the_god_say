@@ -6,9 +6,9 @@ v2 把原本的前端關鍵字比對，換成完全本地執行的 RAG 後端：
 
 ## 展示
 
-![展示動畫](demo/demo.gif)
+![展示動畫](bible-oracle/demo/demo.gif)
 
-完整影片（35 秒、含配樂）：[demo/demo.mp4](demo/demo.mp4)。畫面為全螢幕 WebGL2 曼陀羅聖殿：點擊中央十字架開啟詢問框，輸入煩惱後經文逐字浮現。
+完整影片（35 秒、含配樂）：[bible-oracle/demo/demo.mp4](bible-oracle/demo/demo.mp4)。畫面為全螢幕 WebGL2 曼陀羅聖殿：點擊中央十字架開啟詢問框，輸入煩惱後經文逐字浮現。
 
 ## 架構總覽
 
@@ -285,6 +285,8 @@ hit@1 多出的一題（「我媽一直要我回老家工作」改中家人逼�
 - **前端人工瀏覽器驗證尚待專案擁有者完成**；自動化測試涵蓋比對邏輯與 API，但沒有實機操作過畫面。
 
 ## 7. 本地重現
+
+以下指令都在 `bible-oracle/` 目錄下執行（`cd bible-oracle`）。
 
 需求：Python 3.9+、Node（前端測試）、[Ollama](https://ollama.com)。
 
