@@ -6,37 +6,29 @@ v2 把原本的前端關鍵字比對，換成完全本地執行的 RAG 後端：
 
 ## 展示
 
-![展示動畫](bible-oracle/demo/demo.gif)
+<video src="bible-oracle/demo/demo.mp4" poster="bible-oracle/demo/poster.jpg" controls muted width="100%"></video>
 
-完整影片（35 秒、含配樂）：[bible-oracle/demo/demo.mp4](bible-oracle/demo/demo.mp4)。畫面為全螢幕 WebGL2 曼陀羅聖殿：點擊中央十字架開啟詢問框，輸入煩惱後經文逐字浮現。
+[▶ 觀看完整影片 demo.mp4](bible-oracle/demo/demo.mp4)（35 秒、1080p、含配樂）。畫面為全螢幕 WebGL2 曼陀羅聖殿：點擊中央十字架開啟詢問框，輸入煩惱後經文逐字浮現。
 
 ## 架構總覽
 
 ```mermaid
-flowchart TD
-    U["使用者輸入煩惱"] --> FE["前端 (vanilla JS + WebGL2)"]
-    FE -->|"POST /api/oracle，逾時 8 秒"| API["FastAPI 後端"]
-    FE -.->|"後端失敗 / 逾時 / 限流"| ST["靜態關鍵字比對 (match.js + topics.json)"]
-    API --> C{"SQLite 快取命中?"}
-    C -->|是| OUT
-    C -->|否| S{"1 安全閘（規則）"}
-    S -->|命中自傷字眼| CARE["關懷訊息 + 專線，不走 LLM"]
-    S -->|通過| R["2 檢索：bge-m3 向量 × 精選庫 145 節"]
-    R --> G{"最高相似度 &lt; 0.52?"}
-    G -->|否| P1["候選 = 精選庫 top-20"]
-    G -->|是| P2["候選 = 全語料 31,031 節 top-20（內容過濾）"]
-    P1 --> RR["3 Rerank：qwen3:4b 只回傳編號"]
-    P2 --> RR
-    RR --> V["4 用編號回語料庫取經文（逐字）"]
-    V --> Q["5 qwen3:4b 生成一句假牧師解讀"]
-    Q --> VAL{"6 規則驗證"}
-    VAL -->|不合規重試仍失敗| TPL["固定包裝詞"]
-    VAL -->|合規| OUT["回應 + 寫入快取"]
-    TPL --> OUT
-    ST --> OUT2["前端顯示結果"]
-    OUT --> OUT2
-    CARE --> OUT2
+flowchart LR
+    U(["煩惱"]) --> S{"安全閘<br/>規則"}
+    S -->|自傷字眼| CARE["關懷訊息<br/>不走 LLM"]
+    S -->|通過| R["檢索<br/>bge-m3 × 精選庫"]
+    R --> G{"相似度<br/>&lt; 0.52?"}
+    G -->|否| C1["精選庫<br/>top-20"]
+    G -->|是| C2["全語料 31k<br/>top-20 + 過濾"]
+    C1 --> RR["Rerank<br/>qwen3:4b 回傳編號"]
+    C2 --> RR
+    RR --> V["編號 → 取經文<br/>逐字不改"]
+    V --> Q["解讀<br/>qwen3:4b + 規則驗證"]
+    Q --> OUT(["經文 + 補刀<br/>SQLite 快取"])
+    FE["前端失敗 / 逾時 8 秒"] -.-> ST["靜態關鍵字比對"]
 ```
+
+後端任何一步失敗都會降級（見下節），前端連後端都失敗時改用靜態關鍵字比對。
 
 ## 使用的技術
 
