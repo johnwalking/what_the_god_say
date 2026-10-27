@@ -121,6 +121,23 @@ B0 沒有 top-5 / top-20 的排名（它只回傳單一答案）。B2 的 hit@5 
   - 現在房貸利率是多少 → 路加福音 20:22「我們納稅給該撒、可以不可以」→ wide（勉強）
 - B3 延遲（p50 9.3 秒／p95 11.8 秒）與 B2 同樣是整批評估跑出來的數字，兩次的機器負載不同，**不可互相比較**。
 
+### 靜態模式的日常主題（B0x）
+
+沒有後端（或 API 失敗、逾時）時，前端用 `assets/match.js` 的關鍵字＋bigram 比對。原本只有 30 個煩惱主題，「貓咪」這類日常問題只能落到兜底池抽一節無關經文。`data/extra_topics.json` 另外加了 6 個日常主題：寵物與動物、吃飯與食物、天氣與出門、3C 與遊戲、考試與讀書、交通與旅行，每個主題 7 個關鍵字、8 至 9 句例句、6 節經文。
+
+- **只供靜態模式**：`assets/app.js` 的 `loadData` 選擇性載入這份檔案（404 或格式不對就略過），接在 `topics.json` 的主題後面。API 路徑的精選庫仍只讀 `topics.json`，所以 B2／B3 與評審結果都不受影響。
+- **不搶原本的主題**：日常主題排在後面、關鍵字表只有 7 個（原本主題多為 8 至 12 個），同分時 `pickTopic` 依關鍵字表長度、再依原順序取捨，原本的主題勝出（例：「老公下班只會打電動」仍是抱怨老公）。「手機」只給邊緣權重 1，因為它常出現在抱怨老公、外遇、管教小孩的句子裡。
+- **經文手工挑選、補刀由 Claude 草擬**：36 節經文都是從 `data/corpus.json` 查出來、逐字照抄（`tools/verify.py` 與 `server/test_extras.py` 驗證），選的是字面或意象真的沾邊、但套用得很牽強的經文（例：寵物 → 箴言 12:10「義人顧惜他牲畜的命」；天氣 → 傳道書 11:4「看風的必不撒種」；考試 → 箴言 16:33「籤放在懷裡．定事由耶和華」）。補刀沿用同一套規範並通過 `validate_quip`。
+
+實測（`python eval/run_eval.py b0x`，同 151 題 topic 加 16 題 none）：
+
+| 方案 | topic 題 hit@1 | none 題 `none_fallback_rate` |
+|---|---|---|
+| B0 TF-IDF（30 個主題） | 60.9% | 56.3% |
+| B0x 靜態（含 6 個日常主題） | 61.6% | 18.8% |
+
+hit@1 多出的一題（「我媽一直要我回老家工作」改中家人逼迫）是加入新主題後 bigram 的 IDF 改變造成的，不是刻意調出來的。none 題的兜底率下降，是因為午餐、下雨、高鐵、手機充電、滷肉飯、週末出遊、背單字、筆電螢幕、貓咪 9 題現在命中對應的日常主題；這 16 題本來就在資料集裡，日常主題的關鍵字是依一般用語挑的，但我挑詞時看過這些題目，數字對 B0x 偏樂觀。其餘 3 題（Python、電影、歌）仍走兜底，4 題照舊被原本的主題接走（老闆的英文、聖經版本、老婆餅、房貸利率）。
+
 ### Rerank 消融實驗（`eval/rerank_results.json`，n=151）
 
 | 設定 | hit@1 | hit@20 | 退回 | p50 延遲 | p95 延遲 |
@@ -194,7 +211,7 @@ ollama pull qwen3:4b
 .venv/bin/uvicorn server.main:app --port 8000   # 開 http://localhost:8000
 
 # 評估
-.venv/bin/python eval/run_eval.py b0 b1 b1h b2  # 寫入 eval/results.json
+.venv/bin/python eval/run_eval.py b0 b1 b1h b2  # 寫入 eval/results.json（b0x：靜態模式含日常主題）
 .venv/bin/python eval/rerank_experiment.py      # rerank 消融，寫入 eval/rerank_results.json
 .venv/bin/python eval/judge.py sample           # 取樣並匿名化 40 題 x 3 方案
 .venv/bin/python eval/judge.py summarize        # 彙整評審分數（scores.json 為評審輸出）
@@ -209,7 +226,7 @@ ollama pull qwen3:4b
 server/    FastAPI、pipeline、retrieve、rerank、quip、safety、cache、llm（含各自的測試）
 tools/     extract.py（語料）、build_index.py（向量索引）
 eval/      dataset.jsonl、run_eval.py、rerank_experiment.py、judge.py、各項結果 JSON
-data/      corpus.json、index.npy、topics.json（精選庫）、fallback.json
+data/      corpus.json、index.npy、topics.json（精選庫）、extra_topics.json（僅靜態模式）、fallback.json
 assets/    前端；index.html
 tests/     前端比對邏輯測試（node）
 ```

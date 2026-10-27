@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""跑評估。用法：python eval/run_eval.py [b0] [b1] [b1h] [b2] [b3]（預設 b0 b1）。結果寫入 eval/results.json。"""
+"""跑評估。用法：python eval/run_eval.py [b0] [b0x] [b1] [b1h] [b2] [b3]（預設 b0 b1）。結果寫入 eval/results.json。"""
 from __future__ import annotations
 
 import json
@@ -20,6 +20,7 @@ from server.safety import is_crisis  # noqa: E402
 RESULTS_PATH = os.path.join(HERE, 'results.json')
 B2_LABEL = f'B2 {RERANK_CONFIG_NAME}'
 B3_LABEL = f'B3 {RERANK_CONFIG_NAME} + 信心門檻{DEFAULT_WIDE_THRESHOLD}'
+B0X_LABEL = 'B0x 靜態（含 6 個日常主題）'
 STALE_LABELS = ('B2 bge-m3 + rerank',)
 EVALUABLE = ('topic', 'none')
 
@@ -28,11 +29,12 @@ def _rows_for(dataset: List[dict]) -> List[dict]:
     return [r for r in dataset if r['kind'] in EVALUABLE]
 
 
-def run_b0(dataset: List[dict]) -> List[dict]:
+def run_b0(dataset: List[dict], extras: bool = False) -> List[dict]:
+    """extras=True 時比照前端靜態模式合併 data/extra_topics.json（B0x）。"""
     items = _rows_for(dataset)
     started = time.perf_counter()
     proc = subprocess.run(
-        ['node', os.path.join(HERE, 'b0.mjs')],
+        ['node', os.path.join(HERE, 'b0.mjs')] + (['--extras'] if extras else []),
         input=json.dumps([r['q'] for r in items], ensure_ascii=False),
         capture_output=True, text=True, check=True,
     )
@@ -90,6 +92,8 @@ def main(argv: List[str]) -> None:
 
     if 'b0' in methods:
         rows_by_method['B0 TF-IDF'] = run_b0(dataset)
+    if 'b0x' in methods:
+        rows_by_method[B0X_LABEL] = run_b0(dataset, extras=True)
     if 'b1' in methods:
         from server.corpus import load_corpus
         from server.embedder import BgeM3Embedder

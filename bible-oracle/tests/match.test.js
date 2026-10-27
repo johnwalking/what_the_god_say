@@ -328,3 +328,67 @@ test('topics.json 的關鍵字與例句都不含危機詞', () => {
     for (const p of topic.phrases ?? []) assert.ok(!isCrisis(p), `${topic.id} phrase ${p}`);
   }
 });
+
+/** 靜態模式實際使用的資料：topics.json 的主題後面接上 extra_topics.json（與 app.js 的 loadData 相同）。 */
+function 讀合併資料() {
+  const topicsFile = JSON.parse(readFileSync(new URL('../data/topics.json', import.meta.url), 'utf8'));
+  const extraFile = JSON.parse(readFileSync(new URL('../data/extra_topics.json', import.meta.url), 'utf8'));
+  const topics = [...topicsFile.topics, ...extraFile.topics];
+  return {
+    topics,
+    extra: extraFile.topics,
+    wrappers: topicsFile.wrappers,
+    fallback: [{ ref: '詩篇 17:6', id: 'Ps17v6', text: '兜底' }],
+    index: buildTopicIndex(topics),
+  };
+}
+
+test('日常主題：貓、狗、天氣等問題命中對應主題', () => {
+  const 合併 = 讀合併資料();
+  const 樣本 = [
+    ['貓咪', 'pets'],
+    ['我家的狗一直叫', 'pets'],
+    ['今天天氣好熱', 'weather'],
+    ['中午不知道要吃什麼', 'food'],
+    ['手機一直當機', 'tech'],
+    ['明天要考試還沒讀書', 'study'],
+    ['下班塞車塞了一個小時', 'travel'],
+  ];
+  for (const [問, 期望] of 樣本) {
+    const r = answer(問, 合併);
+    assert.equal(r.kind, 'topic', `「${問}」應命中主題`);
+    assert.equal(r.topicId, 期望, `「${問}」應命中 ${期望}`);
+  }
+  const 涵蓋 = new Set(樣本.map(([, id]) => id));
+  for (const topic of 合併.extra) assert.ok(涵蓋.has(topic.id), `${topic.id} 缺代表句`);
+});
+
+test('日常主題的關鍵字、例句與補刀都不含危機詞', () => {
+  for (const topic of 讀合併資料().extra) {
+    for (const k of topic.keywords) assert.ok(!isCrisis(k.w), `${topic.id} keyword ${k.w}`);
+    for (const p of topic.phrases) assert.ok(!isCrisis(p), `${topic.id} phrase ${p}`);
+    for (const v of topic.verses) assert.ok(!isCrisis(v.quip), `${topic.id} quip ${v.quip}`);
+  }
+});
+
+test('合併日常主題後，原本三十個主題的代表句仍命中原主題', () => {
+  const 合併 = 讀合併資料();
+  const 樣本 = [
+    ['我老婆很煩', 'wife-complaint'],
+    ['老闆很爛想離職', 'bad-boss'],
+    ['每天加班到深夜', 'overtime'],
+    ['我老公什麼都不做每天回家就躺著滑手機', 'husband-complaint'],
+    ['我在學校被霸凌', 'bullied'],
+    ['我每天都失眠睡不著', 'insomnia'],
+    ['小孩不聽話該不該打', 'discipline-kids'],
+    ['我薪水太低了', 'low-pay'],
+  ];
+  for (const [問, 期望] of 樣本) assert.equal(answer(問, 合併).topicId, 期望, `「${問}」應命中 ${期望}`);
+});
+
+test('合併日常主題後，無關的亂句仍走兜底', () => {
+  const 合併 = 讀合併資料();
+  for (const 問 of ['推薦一部電影', '要不要學法文', '幫我取個英文名字', '最近有什麼好聽的歌']) {
+    assert.equal(answer(問, 合併).kind, 'fallback', `「${問}」不該命中任何主題`);
+  }
+});

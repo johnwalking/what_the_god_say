@@ -4,11 +4,15 @@ import { answer, buildTopicIndex } from '../assets/match.js';
 
 const read = (name) => JSON.parse(fs.readFileSync(new URL(`../data/${name}`, import.meta.url), 'utf8'));
 const topicsFile = read('topics.json');
+// --extras：比照前端靜態模式，把 extra_topics.json 的日常主題接在後面；預設行為不變（B0）
+const topics = process.argv.includes('--extras')
+  ? [...topicsFile.topics, ...read('extra_topics.json').topics]
+  : topicsFile.topics;
 const data = {
-  topics: topicsFile.topics,
+  topics,
   wrappers: topicsFile.wrappers,
   fallback: read('fallback.json'),
-  index: buildTopicIndex(topicsFile.topics),
+  index: buildTopicIndex(topics),
 };
 
 const questions = JSON.parse(fs.readFileSync(0, 'utf8'));

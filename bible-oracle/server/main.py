@@ -141,7 +141,8 @@ def create_app(pipeline=None, rate_limit: Tuple[int, float] = (20, 60.0)) -> Fas
     def index():
         return FileResponse(os.path.join(ROOT, 'index.html'))
 
-    for name in ('topics.json', 'fallback.json'):
+    # extra_topics.json 只給前端靜態比對用；API 的精選庫仍只讀 topics.json
+    for name in ('topics.json', 'fallback.json', 'extra_topics.json'):
         app.add_api_route(
             f'/data/{name}',
             (lambda path: (lambda: FileResponse(path)))(os.path.join(ROOT, 'data', name)),

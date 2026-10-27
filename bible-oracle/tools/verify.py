@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""驗證 data/topics.json 的每一節經文與 bible-cut/CUT 原檔一字不差。
+"""驗證 data/topics.json 與 data/extra_topics.json 的每一節經文與 bible-cut/CUT 原檔一字不差。
 
 這是全站的命脈：笑點來自「這真的是聖經寫的」，只要改過一個字就全垮了。
 任何不符即以非零狀態碼結束。
@@ -15,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOPICS_PATH = os.path.join(HERE, '..', 'data', 'topics.json')
 APP_JS_PATH = os.path.join(HERE, '..', 'assets', 'app.js')
 FALLBACK_PATH = os.path.join(HERE, '..', 'data', 'fallback.json')
+EXTRA_PATH = os.path.join(HERE, '..', 'data', 'extra_topics.json')
 
 
 def build_index():
@@ -108,7 +109,13 @@ def main():
     if not data.get('wrappers'):
         errors.append('wrappers 不可為空')
 
-    for topic in data['topics']:
+    # 日常主題（只供靜態模式）：選擇性檔案，存在就用同樣標準驗證
+    extra_topics = []
+    if os.path.exists(EXTRA_PATH):
+        with open(EXTRA_PATH, encoding='utf-8') as handle:
+            extra_topics = json.load(handle)['topics']
+
+    for source, topic in [('topics.json', t) for t in data['topics']] + [('extra_topics.json', t) for t in extra_topics]:
         if not topic.get('verses'):
             errors.append(f'[{topic["id"]}] 沒有任何經文')
         if not topic.get('keywords'):
@@ -127,7 +134,7 @@ def main():
             if verse['text'] != expected_text:
                 errors.append(
                     f'{where}：經文與原檔不符\n'
-                    f'    topics.json：{verse["text"]}\n'
+                    f'    {source}：{verse["text"]}\n'
                     f'    原檔　　　：{expected_text}'
                 )
             if verse['ref'] != expected_ref:
@@ -176,7 +183,7 @@ def main():
         sys.exit(1)
 
     print(
-        f'✓ {len(data["topics"])} 個主題、{checked} 節經文，以及緊急經文池 {emergency_count} 節，'
+        f'✓ {len(data["topics"])} 個主題＋{len(extra_topics)} 個日常主題、{checked} 節經文，以及緊急經文池 {emergency_count} 節，'
         f'fallback.json {fallback_count} 節，全部與原檔一字不差'
     )
 

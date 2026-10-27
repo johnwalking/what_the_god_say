@@ -110,14 +110,30 @@ async function loadJSON(path) {
   return response.json();
 }
 
+/**
+ * 只供靜態比對使用的日常主題（寵物、天氣⋯）。選擇性載入：
+ * 404、網路錯誤或格式不對都當作沒有，不影響主要資料。
+ */
+async function loadExtraTopics() {
+  try {
+    const extra = await loadJSON('data/extra_topics.json');
+    return Array.isArray(extra?.topics) ? extra.topics : [];
+  } catch (error) {
+    console.warn('日常主題載入失敗，略過：', error);
+    return [];
+  }
+}
+
 /** 載入資料；任何一份掛掉就退到緊急池，網站仍然可用。 */
 async function loadData() {
   try {
-    const [topicsFile, fallback] = await Promise.all([
+    const [topicsFile, fallback, extraTopics] = await Promise.all([
       loadJSON('data/topics.json'),
       loadJSON('data/fallback.json'),
+      loadExtraTopics(),
     ]);
-    const topics = topicsFile.topics;
+    // 日常主題接在後面：同分時排序穩定，加上它們的關鍵字表較短，原本的主題優先
+    const topics = [...topicsFile.topics, ...extraTopics];
     return { topics, wrappers: topicsFile.wrappers, fallback, index: buildTopicIndex(topics) };
   } catch (error) {
     console.warn('資料載入失敗，改用緊急經文池：', error);
