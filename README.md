@@ -288,6 +288,8 @@ hit@1 多出的一題（「我媽一直要我回老家工作」改中家人逼�
 
 以下指令都在 `bible-oracle/` 目錄下執行（`cd bible-oracle`）。
 
+**語料來源**：和合本聖經的 HTML 原檔放在 repo 根目錄的 `bible-cut/`，`tools/extract.py` 從 `bible-cut/CUT/` 抽出 31,031 節產生 `data/corpus.json`，`tools/verify.py` 也用它檢查精選經文逐字相同。沒有這個資料夾就無法重建語料庫與向量索引。
+
 需求：Python 3.9+、Node（前端測試）、[Ollama](https://ollama.com)。
 
 ```bash
