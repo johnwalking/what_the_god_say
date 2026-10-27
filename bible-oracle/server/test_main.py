@@ -157,3 +157,25 @@ def test_build_default_pipeline_shares_embedder_and_matrix_with_wide_retriever(m
     assert type(wide) is retrieve.Retriever
     assert pipeline.wide_threshold == main.DEFAULT_WIDE_THRESHOLD
     assert f'wide{main.DEFAULT_WIDE_THRESHOLD}' in pipeline._ns
+
+
+def test_build_default_pipeline_wide_retriever_uses_eligibility_mask(monkeypatch):
+    import numpy as np
+    from server import embedder as embedder_mod, filters, llm as llm_mod, main, retrieve
+    from server.embedder import HashEmbedder
+    from server.fakes import small_corpus
+
+    corpus = small_corpus()
+    embedder = HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    sentinel = np.array([True, False, True, True])
+    monkeypatch.setattr(embedder_mod, 'BgeM3Embedder', lambda: embedder)
+    monkeypatch.setattr(llm_mod, 'OllamaLLM', lambda: None)
+    monkeypatch.setattr(retrieve, 'load_index', lambda: matrix)
+    monkeypatch.setattr('server.corpus.load_corpus', lambda: corpus)
+    monkeypatch.setattr(retrieve, 'curated_ids_from_topics', lambda _t: {'Eph5v22', 'Prov22v7'})
+    monkeypatch.setattr(filters, 'eligible_mask', lambda _c: sentinel)
+    pipeline = main.build_default_pipeline(cache=main.Cache())
+    assert pipeline.wide_retriever.mask is sentinel
+    assert getattr(pipeline.retriever, 'mask', None) is None  # 精選庫不過濾
+    assert pipeline._ns.endswith(f'wide{main.DEFAULT_WIDE_THRESHOLD}f1:')

@@ -76,3 +76,36 @@ def test_hybrid_rejects_curated_ids_missing_from_corpus():
     matrix = embedder.encode([v.text for v in corpus.verses])
     with pytest.raises(ValueError):
         HybridRetriever(corpus, matrix, embedder, {'NOPE'})
+
+
+def test_mask_none_behaves_like_default():
+    corpus, embedder = _corpus(), __import__('server.embedder', fromlist=['HashEmbedder']).HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    plain = Retriever(corpus, matrix, embedder).search('我欠債好多', k=3)
+    masked_none = Retriever(corpus, matrix, embedder, mask=None).search('我欠債好多', k=3)
+    assert [(h.verse.id, h.score) for h in plain] == [(h.verse.id, h.score) for h in masked_none]
+
+
+def test_mask_excludes_ineligible_rows_even_if_best_match():
+    corpus, embedder = _corpus(), __import__('server.embedder', fromlist=['HashEmbedder']).HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    retriever = Retriever(corpus, matrix, embedder, mask=np.array([True, False, True]))
+    hits = retriever.search('我欠債好多', k=3)
+    assert 'Prov22v7' not in [h.verse.id for h in hits]
+    assert len(hits) == 2  # 合格列不足 k 時回傳較少，不補不合格的
+    assert all(np.isfinite(h.score) for h in hits)
+    assert [h.score for h in hits] == sorted((h.score for h in hits), reverse=True)
+
+
+def test_mask_with_enough_rows_returns_k_eligible():
+    corpus, embedder = _corpus(), __import__('server.embedder', fromlist=['HashEmbedder']).HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    hits = Retriever(corpus, matrix, embedder, mask=np.array([True, False, True])).search('明天', k=1)
+    assert len(hits) == 1 and hits[0].verse.id != 'Prov22v7'
+
+
+def test_mask_length_mismatch_raises():
+    corpus, embedder = _corpus(), __import__('server.embedder', fromlist=['HashEmbedder']).HashEmbedder()
+    matrix = embedder.encode([v.text for v in corpus.verses])
+    with pytest.raises(ValueError):
+        Retriever(corpus, matrix, embedder, mask=np.array([True, False]))

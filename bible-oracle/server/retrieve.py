@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import List, Set
+from typing import List, Optional, Set
 
 import numpy as np
 
@@ -24,9 +24,12 @@ def load_index(path: str = DEFAULT_INDEX_PATH) -> np.ndarray:
 
 
 class Retriever:
-    def __init__(self, corpus: Corpus, matrix: np.ndarray, embedder: Embedder):
+    def __init__(self, corpus: Corpus, matrix: np.ndarray, embedder: Embedder, mask: Optional[np.ndarray] = None):
         if matrix.shape[0] != len(corpus):
             raise ValueError(f'索引列數 {matrix.shape[0]} 與語料筆數 {len(corpus)} 不符')
+        if mask is not None and mask.shape != (len(corpus),):
+            raise ValueError(f'mask 長度 {mask.shape} 與語料筆數 {len(corpus)} 不符')
+        self.mask = mask  # None = 不過濾；否則 True 的列才可能出現在結果中
         self.corpus = corpus
         self.matrix = matrix
         self.embedder = embedder
@@ -34,7 +37,12 @@ class Retriever:
     def search(self, question: str, k: int = 20) -> List[Hit]:
         qvec = self.embedder.encode([question])[0]
         scores = self.matrix @ qvec
+        if self.mask is not None:
+            scores = np.where(self.mask, scores, -np.inf)
+            k = min(k, int(self.mask.sum()))
         k = min(k, len(scores))
+        if k <= 0:
+            return []
         top = np.argpartition(-scores, k - 1)[:k]
         top = top[np.argsort(-scores[top])]
         return [Hit(self.corpus.verses[i], float(scores[i])) for i in top]

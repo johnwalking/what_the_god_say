@@ -79,6 +79,7 @@ def warm_up(pipeline) -> None:
 def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
     from server.corpus import load_corpus
     from server.embedder import BgeM3Embedder
+    from server.filters import eligible_mask
     from server.llm import OllamaLLM
     from server.quip import load_examples
     from server.rerank import CONFIGS
@@ -96,13 +97,14 @@ def build_default_pipeline(cache: Optional[Cache] = None) -> Pipeline:
         corpus, matrix, embedder, curated_ids_from_topics(topics_file),
         k_curated=config['k_curated'],
     )
-    wide_retriever = Retriever(corpus, matrix, embedder)  # 共用 embedder 與矩陣，不重複載入
+    # 共用 embedder 與矩陣，不重複載入；只有全語料展開套用內容過濾，精選庫不過濾
+    wide_retriever = Retriever(corpus, matrix, embedder, mask=eligible_mask(corpus))
     return Pipeline(
         corpus, retriever, OllamaLLM(),
         examples=load_examples(topics_file), wrappers=topics_file['wrappers'],
         cache=cache or Cache(os.path.join(ROOT, 'data', 'cache.sqlite')),
         rerank_fn=config['fn'],
-        cache_ns=f'{RERANK_CONFIG_NAME}|{len(corpus.verses)}|wide{DEFAULT_WIDE_THRESHOLD}',
+        cache_ns=f'{RERANK_CONFIG_NAME}|{len(corpus.verses)}|wide{DEFAULT_WIDE_THRESHOLD}f1',
         wide_retriever=wide_retriever, wide_threshold=DEFAULT_WIDE_THRESHOLD,
     )
 
