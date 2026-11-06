@@ -2,7 +2,9 @@
 
 > **English summary** — A satirical web app about "quoting out of context": you type a life problem, and it picks one Bible verse (verbatim, never altered) to "answer" it, followed by a gently-worded, subtly harmful one-liner from a fake pastor. Version 2 replaces the original front-end keyword matching with a fully local RAG backend: bge-m3 embeddings for retrieval, and qwen3:4b (via Ollama) for verse selection and commentary, running on an M3 / 16GB MacBook with no cloud API calls.
 >
-> The point of the project is the **measurement**, not just the demo. I built a 179-question evaluation set (151 on-topic, 16 off-topic, 12 self-harm safety cases) and compared designs with hit@k and LLM-as-judge, including the unflattering result that plain embedding retrieval (hit@1 4.0%) is no better than hand-tuned keywords (60.9%). What works is a hand-curated verse pool (145 verses across 30 themes, picked by hand for the v1 site in Aug–Sep 2026, before the evaluation questions were written in Oct) plus an LLM choosing among 20 candidates (58.3% hit@1, verbatim verses 151/151). Caveat: the questions are model-drafted and "correct" means membership in that pool, so the metric still favors it (see EVALUATION.md §6).
+> The point of the project is the **measurement**, not just the demo. I built a 179-question evaluation set (151 on-topic, 16 off-topic, 12 self-harm safety cases, drafted by a model and spot-checked by me) and compared designs with a **theme-match@k** metric and an LLM-as-judge. Theme-match@1 asks: *is the selected verse in the hand-curated pool of the question's gold theme?* The pool is 145 verses across 30 themes, picked by hand for the v1 site in Aug–Sep 2026, before the evaluation questions were written in Oct. It is therefore a **topic-routing score, not answer accuracy**, and it structurally favors the curated pool.
+>
+> Results (n=151): the production pipeline (curated pool of 20 candidates + LLM reranking + a confidence gate that falls back to the full 31k-verse corpus) scores **49.7%** theme-match@1; the same pipeline without the gate scores 58.3%. Hand-tuned keywords (the v1 baseline, tuned on the same 30 themes) score 60.9%, so **the LLM pipeline does not beat the baseline on this metric**. Plain embedding search over the full corpus scores 4.0%, but that number is deflated by construction, since almost no corpus verse can ever count as a hit. The more independent signal is the blind LLM-as-judge relevance score (n=40): 4.05 for the pipeline vs 3.60 for keywords, with the caveats that n is small and the judge is a single model. Verses are verbatim in 151/151 cases, guaranteed by design (the LLM returns only a candidate index; the text is looked up from the corpus).
 >
 > **Stack:** Python 3.9, FastAPI, SQLite cache, bge-m3, Ollama (qwen3:4b), numpy cosine search, vanilla ES modules, WebGL2, Web Audio. **Engineering:** graceful degradation across five stages, a rule-based crisis-detection safety gate that runs before retrieval, 263 pytest + 156 node tests. Full results and limitations: [EVALUATION.md](bible-oracle/EVALUATION.md). The rest of this README is in Traditional Chinese.
 
@@ -53,7 +55,7 @@ flowchart LR
 | 後端 | Python 3.9、FastAPI、SQLite 快取、滑動視窗限流 | `POST /api/oracle`，啟動時暖機模型 |
 | 安全 | 規則式危機偵測（Python 與 JS 兩份，有一致性測試） | 自傷字眼直接回關懷訊息，在任何檢索前攔截 |
 | 前端 | vanilla ES modules（零依賴）、WebGL2 曼陀羅、Canvas 2D 後備、Web Audio 合成配樂 | 聖殿 UI；`prefers-reduced-motion` 支援 |
-| 評估 | 自建 151+16+12 題資料集、hit@k、LLM-as-judge | 量化比較 B0 / B1 / B1h / B2 / B3 與 rerank 消融 |
+| 評估 | 自建 179 題資料集（151 主題 + 16 離題 + 12 安全）、theme-match@k、LLM-as-judge | 量化比較 B0 / B1 / B1h / B2 / B3 與 rerank 消融 |
 | 測試 | pytest 263 項、node 156 項 | 後端、比對邏輯、WebGL 數學與場景建構 |
 
 ## 降級時會變成什麼
@@ -64,23 +66,25 @@ flowchart LR
 |---|---|---|---|---|
 | 全部正常 | `rerank+llm` | LLM 在 20 個候選中挑最貼題的 | LLM 針對該經文與煩惱即時生成 | 最貼題、最好笑；約 3 秒 |
 | 解讀失敗（驗證不過 / 生成逾時） | `rerank+template` | 同上 | 固定包裝詞（如「主已經回答了，是你還沒讀懂。」） | 經文仍貼題，補刀變成罐頭句 |
-| Rerank 失敗（Ollama 掛掉、非法編號） | `top1+llm` / `top1+template` | 檢索相似度第 1 名（純 embedding，實測 hit@1 僅 4%，常離題） | LLM 或固定包裝詞 | 經文常不太相關；Ollama 掛掉時兩段都失敗，變 `top1+template` |
+| Rerank 失敗（Ollama 掛掉、非法編號） | `top1+llm` / `top1+template` | 檢索相似度第 1 名（純 embedding，實測 theme-match@1 僅 4%，常離題） | LLM 或固定包裝詞 | 經文常不太相關；Ollama 掛掉時兩段都失敗，變 `top1+template` |
 | 後端 503 / 前端逾時 8 秒 / 被限流 | （前端）靜態 | `match.js` 以關鍵字比對 30+6 個主題，比不到就從 `fallback.json` 隨機抽 | `topics.json` 預寫的補刀（隨機兜底則用通用句） | 可用但最弱：不看語意，只看關鍵字；離題題 18.8% 落到隨機兜底 |
 | 安全閘命中 | `safety` | 不給經文 | 關懷訊息與專線（1925／1995／119） | 無動畫、無鐘聲、配樂降為近乎無聲 |
 
-以評估數字對照：完整管線 B2 hit@1 為 58.3%；降到純 embedding 第 1 名（B1h）為 4.0%；退到靜態關鍵字（B0）為 60.9%（但那是針對同一批主題手工調校的）。
+以評估數字對照：完整管線（無門檻的 B2）theme-match@1 為 58.3%、上線版 B3 為 49.7%；降到純 embedding 第 1 名（B1h）為 4.0%；退到靜態關鍵字（B0）為 60.9%（但那是針對同一批主題手工調校的）。
 
 ## 瓶頸與限制
 
 - **延遲**：每次請求跑兩次 4B 模型，端到端 p50 約 3.3 秒，冷啟動可達 18 秒（所以有暖機與 8 秒前端逾時）；多個請求競爭時 p50 曾升到 13.7 秒，只適合單機展示。
-- **檢索**：純 embedding 在口語煩惱上幾乎沒用（hit@1 4%），效果來自人工精選庫 + LLM 小範圍挑選；全語料展開的答案多是字面相近。
+- **檢索**：純 embedding 在口語煩惱上幾乎沒用（theme-match@1 4%），效果來自人工精選庫 + LLM 小範圍挑選；全語料展開的答案多是字面相近。
 - **4B 模型**：解讀常只是重述經文，好笑度 2.45／5，低於預寫的人工補刀 3.30。
 - **規則式過濾與安全閘**：會誤殺也會漏網；委婉的自傷說法可能漏掉，不是完整的心理安全方案。
 - **評估偏小**：離題題 16 題、評審 n=40、資料集由模型草擬。
 
-## 評估結果（n=151，hit@k = 選中的經文屬於該題標準主題的精選池）
+## 評估結果（n=151）
 
-| 方案 | hit@1 | hit@5 | hit@20 | 說明 |
+**theme-match@k** = 選中的經文屬於該題標準主題的精選池。這是「主題路由」分數，不是答案正確率；標準答案就是精選池的成員資格，所以對精選庫有利，B1 / B1h 的低分也有一部分是定義造成的（全語料裡幾乎沒有經文能算命中）。較獨立的品質訊號是匿名 LLM 評審的相關度（見 EVALUATION.md）。
+
+| 方案 | theme-match@1 | theme-match@5 | theme-match@20 | 說明 |
 |---|---|---|---|---|
 | B0 人工調校關鍵字（v1） | 60.9% | - | - | 基線；針對同樣 30 個主題手調，對它有利 |
 | B1 bge-m3 純全語料檢索 | 4.0% | 7.3% | 22.5% | 口語與經文用詞差太遠 |
