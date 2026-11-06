@@ -1,4 +1,11 @@
-# 主的旨意 v2：本地 RAG 版
+# 主的旨意 v2：本地 RAG 版 / Local RAG Bible Oracle
+
+> **English summary** — A satirical web app about "quoting out of context": you type a life problem, and it picks one Bible verse (verbatim, never altered) to "answer" it, followed by a gently-worded, subtly harmful one-liner from a fake pastor. Version 2 replaces the original front-end keyword matching with a fully local RAG backend: bge-m3 embeddings for retrieval, and qwen3:4b (via Ollama) for verse selection and commentary, running on an M3 / 16GB MacBook with no cloud API calls.
+>
+> The point of the project is the **measurement**, not just the demo. I built a 151+16+12-question evaluation set and compared designs with hit@k and LLM-as-judge, including the unflattering result that plain embedding retrieval (hit@1 4.0%) is no better than hand-tuned keywords (60.9%). What works is a hand-curated verse pool plus an LLM choosing among 20 candidates (58.3% hit@1, verbatim verses 151/151).
+>
+> **Stack:** Python 3.9, FastAPI, SQLite cache, bge-m3, Ollama (qwen3:4b), numpy cosine search, vanilla ES modules, WebGL2, Web Audio. **Engineering:** graceful degradation across five stages, a rule-based crisis-detection safety gate that runs before retrieval, 263 pytest + 156 node tests. Full results and limitations: [EVALUATION.md](bible-oracle/EVALUATION.md). The rest of this README is in Traditional Chinese.
+
 
 一個諷刺「斷章取義」的網站：輸入一個人生煩惱，它會挑一節聖經經文（一字不改）來「回答」，再配一句溫柔長輩口吻、把事情越弄越糟的「假牧師解讀」。
 
